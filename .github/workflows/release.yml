@@ -1,0 +1,47 @@
+name: release
+
+# Publishes to npm from CI rather than a laptop. With a trusted publisher
+# configured on npmjs.com there is no token and no one-time code: npm proves
+# the build came from this repository over OIDC, and stamps the result with
+# provenance a reader can verify.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm ci
+      - run: npm run build
+
+      # Nothing ships that has not passed everything, including the mutants.
+      - run: npm run test:unit
+      - run: npm run test:it
+      - run: npm run test:concurrency
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:browser
+      - run: npm run test:mutants
+
+      - name: The tag must match the version in package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag $tag does not match package.json $pkg" >&2
+            exit 1
+          fi
+
+      - run: npm publish --access public --provenance
