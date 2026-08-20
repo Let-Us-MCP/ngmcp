@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mount } from "./component-harness.mjs";
+import { mount, VIEW } from "./component-harness.mjs";
 
 const ENGINES = (process.env.NGMCP_ENGINES ?? "chromium,webkit").split(",");
 
@@ -17,7 +17,10 @@ const COLUMNS = `[
   { key: "errors",  label: "Errors", align: "end" }
 ]`;
 
+const IMPORT = `import { dataTable } from "${VIEW}";`;
+
 const build = (extra = "") => `
+  ${IMPORT}
   const table = dataTable({
     rows: ${ROWS},
     columns: ${COLUMNS},

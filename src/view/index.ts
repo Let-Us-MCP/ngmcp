@@ -8,6 +8,14 @@ export type { Signal } from "./reactive.js";
 export { h, list, read, append } from "./dom.js";
 export type { Reactive, Props, Child } from "./dom.js";
 export { dataTable } from "./panes/data-table.js";
+export { metric } from "./panes/metric.js";
+export type { Metric, MetricOptions, MetricState } from "./panes/metric.js";
+export { toaster, banner } from "./notify/index.js";
+export type { Toaster, Banner, Severity, ToastOptions, BannerOptions } from "./notify/index.js";
+export { button } from "./widgets/button.js";
+export type { Button, ButtonOptions, ButtonVariant } from "./widgets/button.js";
+export { form } from "./widgets/form.js";
+export type { Form, FormOptions, Field, FieldType } from "./widgets/form.js";
 export type {
   DataTable, DataTableOptions, Column, Row, SortDirection,
 } from "./panes/data-table.js";

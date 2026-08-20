@@ -118,5 +118,45 @@
     "replace": "      if (this.disposed) return;",
     "suite": "test/unit/reactive.test.js",
     "why": "Dependencies accumulate instead of being re-collected, so unrelated changes cause renders. That is the rerun model with extra steps."
+  },
+  {
+    "name": "prefilling the form also submits it",
+    "file": "src/view/widgets/form.ts",
+    "find": "      prefilled.set(touched);\n",
+    "replace": "      prefilled.set(touched);\n      void trySubmit();\n",
+    "suite": "test/browser/widgets.test.js",
+    "why": "The agent gets to press the button, and the human review the form represents becomes theatre."
+  },
+  {
+    "name": "a refused operation is swallowed",
+    "file": "src/view/widgets/button.ts",
+    "find": "      error.set(failure.message || \"The host refused that.\");",
+    "replace": "      void failure;",
+    "suite": "test/browser/widgets.test.js",
+    "why": "The button appears to work and does nothing, which is the commonest failure in the wild."
+  },
+  {
+    "name": "a metric colours its delta by sign alone",
+    "file": "src/view/panes/metric.ts",
+    "find": "    return rising === (options.deltaIsGood === \"up\") ? \"good\" : \"bad\";",
+    "replace": "    return rising ? \"good\" : \"bad\";",
+    "suite": "test/browser/metric.test.js",
+    "why": "A rise in errors is shown as good, which is backwards half the time."
+  },
+  {
+    "name": "every toast is announced separately",
+    "file": "src/view/notify/index.ts",
+    "find": "    region.textContent = messages.length === 1\n      ? messages[0] as string\n      : `${messages.length} notifications, latest: ${messages[messages.length - 1]}`;",
+    "replace": "    for (const m of messages) region.textContent = m;",
+    "suite": "test/browser/notify.test.js",
+    "why": "A burst becomes twenty interruptions, which is unusable at any speed."
+  },
+  {
+    "name": "set() treats a function argument as an updater",
+    "file": "src/view/reactive.ts",
+    "find": "  read.set = (next) => {\n    if (equals(value, next)) return;",
+    "replace": "  read.set = ((next: unknown) => {\n    if (typeof next === \"function\") next = (next as (p: T) => T)(value);\n    if (equals(value, next as T)) return;",
+    "suite": "test/unit/reactive.test.js",
+    "why": "A signal can no longer hold a function, so a computed returning a formatter silently calls it instead of storing it."
   }
 ]

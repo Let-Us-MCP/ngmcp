@@ -25,7 +25,10 @@ let pending: Set<Computation> | null = null;
 
 export interface Signal<T> {
   (): T;
-  set(value: T | ((previous: T) => T)): void;
+  /** Store a value. Stored as given, including when it is a function. */
+  set(value: T): void;
+  /** Derive the next value from the current one. */
+  update(next: (previous: T) => T): void;
   peek(): T;
 }
 
@@ -42,11 +45,13 @@ export function signal<T>(initial: T, equals: (a: T, b: T) => boolean = Object.i
   }) as Signal<T>;
 
   read.peek = () => value;
+  // `set` stores what it is given and never interprets it. Treating a
+  // function argument as an updater is the usual shortcut, and it makes a
+  // signal unable to hold a function, which is exactly what a computed value
+  // that returns a formatter needs to do. `update` is the separate verb.
   read.set = (next) => {
-    const resolved = typeof next === "function"
-      ? (next as (previous: T) => T)(value) : next;
-    if (equals(value, resolved)) return;
-    value = resolved;
+    if (equals(value, next)) return;
+    value = next;
     if (pending) {
       for (const s of subscribers) pending.add(s);
       return;
@@ -54,6 +59,7 @@ export function signal<T>(initial: T, equals: (a: T, b: T) => boolean = Object.i
     // Copied, because a computation may resubscribe while we iterate.
     for (const s of [...subscribers]) if (!s.disposed) s.run();
   };
+  read.update = (next) => read.set(next(value));
   return read;
 }
 

@@ -114,7 +114,7 @@ export function dataTable<R extends Row = Row>(
   function toggle(row: R): void {
     if (selection === "none") return;
     const id = rowId(row);
-    selected.set((previous) => {
+    selected.update((previous) => {
       if (selection === "single") return previous[0] === id ? [] : [id];
       return previous.includes(id)
         ? previous.filter((x) => x !== id)
@@ -127,7 +127,7 @@ export function dataTable<R extends Row = Row>(
   function sortBy(column: Column<R>): void {
     if (column.sortable === false) return;
     if (sortKey() === column.key) {
-      sortDirection.set((d) => (d === "ascending" ? "descending" : "ascending"));
+      sortDirection.update((d) => (d === "ascending" ? "descending" : "ascending"));
     } else {
       sortKey.set(column.key);
       sortDirection.set("ascending");
@@ -226,14 +226,14 @@ export function dataTable<R extends Row = Row>(
         type: "button", text: "Previous",
         "aria-label": "Previous page",
         disabled: computed(() => page() <= 0),
-        onclick: () => page.set((p) => Math.max(0, p - 1)),
+        onclick: () => page.update((p) => Math.max(0, p - 1)),
       }),
       h("span", { class: "page-label", text: label }),
       h("button", {
         type: "button", text: "Next",
         "aria-label": "Next page",
         disabled: computed(() => page() >= pageCount() - 1),
-        onclick: () => page.set((p) => Math.min(pageCount() - 1, p + 1)),
+        onclick: () => page.update((p) => Math.min(pageCount() - 1, p + 1)),
       })));
   }
 

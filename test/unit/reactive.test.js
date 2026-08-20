@@ -110,9 +110,9 @@ test("cleanups run before the next pass and on disposal", () => {
   assert.deepEqual(log, ["cleanup 1", "cleanup 2"]);
 });
 
-test("a signal can take an updater function", () => {
+test("a signal derives its next value with update", () => {
   const n = signal(1);
-  n.set((previous) => previous + 1);
+  n.update((previous) => previous + 1);
   assert.equal(n(), 2);
 });
 
@@ -122,4 +122,19 @@ test("peek reads without subscribing even inside an effect", () => {
   effect(() => { n.peek(); runs += 1; });
   n.set(2);
   assert.equal(runs, 1);
+});
+
+test("a signal can hold a function, because set never interprets it", () => {
+  const fn = (n) => n * 2;
+  const s = signal(null);
+  s.set(fn);
+  assert.equal(s(), fn, "set called the function as an updater instead of storing it");
+  assert.equal(s()(21), 42);
+});
+
+test("a computed may return a function", () => {
+  const locale = signal("en-US");
+  const format = computed(() => (n) => new Intl.NumberFormat(locale()).format(n));
+  assert.equal(typeof format(), "function");
+  assert.equal(format()(1234567), "1,234,567");
 });
