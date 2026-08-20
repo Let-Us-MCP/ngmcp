@@ -47,7 +47,12 @@ applies the mutation, runs that suite, and requires it to fail. A surviving
 mutant means the test is decoration, and CI fails on one.
 
 This is not a preference. Every defect found here so far got past a green
-suite first, including two the mutation runner caught on its own first pass.
+suite first, including three the mutation runner caught by itself: two weak
+tests, and one piece of code that turned out to do nothing at all.
+
+The single exception is a test guarding a **platform** guarantee rather than
+code of ours, where there is nothing to mutate. Say so in a comment on the
+test, as `layout.test.js` does for dialog focus restoration.
 
 Some other things learned the hard way:
 
@@ -60,6 +65,54 @@ Some other things learned the hard way:
   the `App` object first, then over stdio, and compare.
 - **A mutant that removes one of two redundant guards proves nothing.** Remove
   every guard the test claims to cover.
+
+## The component library
+
+`src/view/` is the half that runs inside the frame. Four kinds, following
+Panel's taxonomy with one addition, and the reasoning is in `PHILOSOPHY.md`:
+
+- **Pane** renders a shape and knows nothing about its source. `dataTable`
+  draws any list of objects; the same rows could be a chart instead.
+- **Widget** holds input state and answers to a person **and** an agent.
+- **Layout** arranges and holds no data, but answers to the host's size and
+  display mode.
+- **Surface** is the host relationship itself. Not built yet.
+
+Every component carries four properties, or it does not land:
+
+1. Three host states where a capability is involved: granted, absent, refused.
+   Silence on refusal is the failure this is for.
+2. A keyboard route. Always.
+3. Accessibility asserted, not claimed.
+4. Its own tests, and the mutant they must kill.
+
+## Sandbox facts, established by probing
+
+Do not assume any of these; they were all checked, and two were surprises.
+
+- **`<form>` submission does not work.** The MCP Apps sandbox is
+  `allow-scripts` and `allow-same-origin`, with no `allow-forms`. Chromium
+  blocks it outright and WebKit fires the event, so a native form works in one
+  engine and silently does nothing in the other. `form.ts` wires submission by
+  hand and re-implements Enter.
+- **`<dialog>.showModal()` does work**, in both engines, opaque origin or not.
+  `allow-modals` governs `alert` and `confirm`, not `<dialog>`. Use the
+  platform's dialog and inherit its focus trap.
+- **`<dialog>.close()` restores focus to the opener** in both engines. A
+  hand-written restore was removed once a mutant proved it changed nothing.
+- **`Intl.NumberFormat()` with no locale differs by engine.** 1234567 renders
+  as `1,234,567` in Chromium and `12,34,567` in WebKit. Take the locale from
+  `hostContext.locale`; never rely on the default.
+
+## Two rules in the reactive core
+
+- **`set` stores, `update` derives.** `set` never interprets a function
+  argument, because a signal has to be able to hold one: a `computed` that
+  returns a formatter is a normal thing to want. Use `update(fn)` to derive
+  from the previous value.
+- **A view must be bundled.** Nothing can be fetched inside a `ui://` frame,
+  so `bundleView()` inlines everything. `esbuild` is a development dependency,
+  imported lazily, so the server runtime keeps no dependencies.
 
 ## Things that are easy to get wrong
 
