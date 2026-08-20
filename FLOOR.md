@@ -1,7 +1,27 @@
 # The floor
 
+## Why anyone reaches for an MCP app
+
+A tool answers twice. `content` carries a sentence for the model;
+`structuredContent` carries the data. Without a view, the second half has
+nowhere to go, so the data gets flattened into the sentence and the model is
+handed a table it has to describe in prose.
+
+People reach for MCP apps to stop doing that. The app **is** the structured
+response: eight deployments become a table that sorts, a month of latency
+becomes a line, an approval becomes a card with the provenance attached. Text
+is what you fall back to when the host cannot render, not the destination.
+
+Everything below follows from taking that seriously. If an app is a structured
+response, the ceiling on the response is the expressiveness of the component
+library, and today that ceiling is a `<table>` somebody hand-rolled. A
+dashboard is the limit case: many structured responses, composed, persisting
+across turns.
+
+## What the floor is
+
 What an MCP app template library has to contain before it is worth choosing
-over writing the thing yourself. Three sources, each supplying a different
+over writing the thing yourself. Four sources, each supplying a different
 kind of obligation.
 
 **`@modelcontextprotocol/ext-apps`** supplies the wire. It is a transport and
