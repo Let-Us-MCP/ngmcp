@@ -1,0 +1,12 @@
+:root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif }
+    body { margin: 0; padding: 12px }
+    .stack { display: flex; flex-direction: column; gap: 10px }
+    .columns { display: grid; gap: 10px }
+    .card { border: 1px solid #8884; border-radius: 8px; padding: 12px }
+    .data-table { border-collapse: collapse; width: 100% }
+    .data-table th, .data-table td { text-align: left; padding: 6px 8px;
+      border-bottom: 1px solid #8884 }
+    .data-table td.num, .data-table th.num { text-align: right }
+    .data-table tr[aria-selected="true"] { background: #0a84ff22 }
+    .metric-value { font-size: 22px; font-weight: 600 }
+    .metric-bad .metric-value { color: #c00 }
