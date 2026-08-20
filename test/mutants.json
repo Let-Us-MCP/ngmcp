@@ -1,0 +1,82 @@
+[
+  {
+    "name": "nothing checks for cancellation before the handler starts",
+    "file": "src/runtime/dispatch.ts",
+    "find": "      if (lifetime.aborted) {\n        return err(id, CODE.internal, `Request ${lifetime.reason}`);\n      }\n      const output = await this.#limiter.run(async () => {\n        if (lifetime.aborted) throw new AbortedBeforeStart();\n",
+    "replace": "      const output = await this.#limiter.run(async () => {\n",
+    "suite": "test/concurrency/cancel-before-start.test.js",
+    "why": "Both guards removed. A request cancelled while queued then reaches its handler, which waits for an abort that already fired and never answers. Either guard alone is enough, so the mutant has to remove both."
+  },
+  {
+    "name": "an older protocol version is accepted",
+    "file": "src/protocol/meta.ts",
+    "find": "  if (!VERSION_EXEMPT.has(method) && protocolVersion !== PROTOCOL_VERSION) {",
+    "replace": "  if (false) {",
+    "suite": "test/integration/protocol.test.js",
+    "why": "Answering a version we do not speak looks like agreement and is not."
+  },
+  {
+    "name": "the required _meta fields are not required",
+    "file": "src/protocol/meta.ts",
+    "find": "  if (missing.length) {",
+    "replace": "  if (false) {",
+    "suite": "test/unit/meta.test.js",
+    "why": "Reading context from anywhere but the request is the connection state this version deleted."
+  },
+  {
+    "name": "a missing resource uses the retired code",
+    "file": "src/runtime/dispatch.ts",
+    "find": "      throw new RpcError(CODE.invalidParams, `Resource not found: ${uri}`);",
+    "replace": "      throw new RpcError(-32002, `Resource not found: ${uri}`);",
+    "suite": "test/integration/protocol.test.js",
+    "why": "-32002 was retired with 2025-11-25 and this version forbids emitting it."
+  },
+  {
+    "name": "progress is sent without a token",
+    "file": "src/runtime/notifications.ts",
+    "find": "    if (this.progressToken === undefined || this.closed) return;",
+    "replace": "    if (this.closed) return;",
+    "suite": "test/concurrency/dispatch.test.js",
+    "why": "Progress the client never opted into invents a correlation it cannot use."
+  },
+  {
+    "name": "notifications outlive their request",
+    "file": "src/runtime/notifications.ts",
+    "find": "    return this.lifetime.settled || this.lifetime.aborted;",
+    "replace": "    return false;",
+    "suite": "test/concurrency/dispatch.test.js",
+    "why": "A message after the response belongs to a request the client has finished with."
+  },
+  {
+    "name": "backpressure is never wired to the transport",
+    "file": "src/transport/stdio.ts",
+    "find": "    this.dispatcher.backpressure = this.backpressure(\n      this.options.highWaterMark ?? 64 * 1024);",
+    "replace": "",
+    "suite": "test/concurrency/limits.test.js",
+    "why": "The mechanism existed and was not connected, so every notification queued."
+  },
+  {
+    "name": "the concurrency limit is ignored",
+    "file": "src/runtime/concurrency.ts",
+    "find": "    if (this.limit > 0 && this.#active >= this.limit) {",
+    "replace": "    if (false) {",
+    "suite": "test/concurrency/limits.test.js",
+    "why": "A limit nothing enforces is a number in a config file."
+  },
+  {
+    "name": "a settled request can still be aborted",
+    "file": "src/runtime/concurrency.ts",
+    "find": "    if (this.controller.signal.aborted || this.#settled) return;",
+    "replace": "    if (this.controller.signal.aborted) return;",
+    "suite": "test/unit/concurrency.test.js",
+    "why": "A timer that fires after the response reopens a request that is over."
+  },
+  {
+    "name": "an empty input schema becomes null",
+    "file": "src/runtime/registry.ts",
+    "find": "  if (!schema) return { type: \"object\" };",
+    "replace": "  if (!schema) return null as unknown as JsonSchema;",
+    "suite": "test/unit/registry.test.js",
+    "why": "inputSchema MUST be a JSON Schema object and MUST NOT be null."
+  }
+]

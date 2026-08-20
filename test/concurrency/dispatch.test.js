@@ -147,3 +147,19 @@ test("a slow tool that ignores its signal still cannot write after cancellation"
     assert.equal(after, before, "the handler kept talking after its request died");
   });
 });
+
+test("a handler that keeps talking after it returned is silenced by the runtime", async () => {
+  const client = connect();
+  try {
+    const answer = await client.request("tools/call",
+      { name: "talks_after_returning", arguments: {} }, { progressToken: "late" });
+    assert.equal(answer.result.structuredContent.returnedImmediately, true);
+    const atResponse = client.notifications.filter(
+      (n) => n.params?.progressToken === "late").length;
+    await settle(300);
+    const afterwards = client.notifications.filter(
+      (n) => n.params?.progressToken === "late").length;
+    assert.equal(afterwards, atResponse,
+      `${afterwards - atResponse} notification(s) went out after the response`);
+  } finally { await client.close(); }
+});

@@ -124,3 +124,22 @@ Two of those tests are load-bearing and were checked against the mutation they
 exist to catch. Filtering the table must cost no tool call, and adding
 `allow-same-origin` to the frame must fail the suite rather than quietly
 weaken every security claim the view makes.
+
+## Mutants
+
+```
+npm run test:mutants
+```
+
+Every test here ships with the mutation it has to catch. The runner applies
+each one to the source, runs the suite that claims to catch it, and requires
+that run to fail. A mutant that survives means the test is decoration.
+
+That is not a stylistic preference. Every defect this project has found so far
+got past a green suite first, including two the runner caught on its first
+pass: a cancellation test that passed because a second, redundant guard was
+still in place, and a notification-lifetime test with no case where a handler
+kept talking after it returned.
+
+`test/mutants.json` carries the anchor, the suite and one line on what breaks.
+A stale anchor fails the run rather than being skipped.

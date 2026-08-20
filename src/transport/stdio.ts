@@ -14,6 +14,8 @@ export interface StdioOptions {
    * end up hanging on a process that will never be spoken to again. */
   exitOnClose?: boolean;
   exit?: (code: number) => void;
+  /** Bytes the transport may hold before advisory traffic is thinned. */
+  highWaterMark?: number;
 }
 
 /** One JSON object per line, both ways.
@@ -48,6 +50,8 @@ export class StdioTransport {
     const stdout: Writable = this.options.stdout ?? (process.stdout as unknown as Writable);
 
     this.dispatcher.sink = (note: Notification) => this.#write(stdout, note);
+    this.dispatcher.backpressure = this.backpressure(
+      this.options.highWaterMark ?? 64 * 1024);
     stdout.on("error", () => { /* the host went away mid-write */ });
 
     stdin.on("data", (chunk: Buffer | string) => {

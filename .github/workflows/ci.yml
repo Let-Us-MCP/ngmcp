@@ -25,3 +25,5 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Views, in Chromium and WebKit
         run: npm run test:browser
+      - name: Every test must catch the mutant it exists for
+        run: npm run test:mutants

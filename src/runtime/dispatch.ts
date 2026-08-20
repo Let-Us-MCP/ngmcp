@@ -51,13 +51,21 @@ export class Dispatcher {
   readonly #limiter: Limiter;
   readonly inFlight = new InFlight();
   #sink: Sink = () => {};
+  #backpressure: Backpressure | undefined;
 
   constructor(private readonly options: DispatcherOptions) {
     this.#limiter = new Limiter(options.concurrency ?? 0);
+    this.#backpressure = options.backpressure;
   }
 
   /** Where notifications go. Set by the transport. */
   set sink(sink: Sink) { this.#sink = sink; }
+
+  /** How full the transport is. A transport sets this when it attaches, since
+   *  it does not exist yet when the dispatcher is built. Without it every
+   *  notification queues, which is the difference between a mechanism that
+   *  exists and one that runs. */
+  set backpressure(backpressure: Backpressure) { this.#backpressure = backpressure; }
 
   get capabilities(): Record<string, unknown> {
     return {
@@ -185,7 +193,7 @@ export class Dispatcher {
     const timeout = tool.definition.timeoutMs ?? this.options.defaultTimeoutMs ?? 0;
     const lifetime = new RequestLifetime(timeout, this.options.clock ?? systemClock);
     const notifier = new RequestNotifier(
-      this.#sink, lifetime, meta.progressToken, meta.logLevel, this.options.backpressure,
+      this.#sink, lifetime, meta.progressToken, meta.logLevel, this.#backpressure,
     );
     this.inFlight.add(id, lifetime);
 
