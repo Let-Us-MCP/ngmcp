@@ -1,6 +1,7 @@
-import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { writeFileSync, unlinkSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright";
 import { bundleView } from "../../dist/build/bundle.js";
@@ -92,6 +93,41 @@ export const BASE_CSS = `
   .stream-lines { max-height: 160px; overflow-y: auto; font: 11.5px/1.5 ui-monospace, monospace }
   .stream-line { padding: 1px 4px } .stream-error { color: #c00 }
 `;
+
+/* Accessibility asserted rather than claimed. The component is checked where
+ * it actually runs, alone in the frame, because an app that uses it can hide a
+ * missing name behind a heading that happens to sit nearby.
+ *
+ * Page-level rules are off: a component is not a document, so it has no
+ * landmark, no `<h1>` and no `lang`, and saying otherwise every time would
+ * train the reader to skim the output. Contrast is off because the colours are
+ * this harness's, not the library's. */
+const AXE = readFileSync(createRequire(import.meta.url).resolve("axe-core"), "utf8");
+const PAGE_RULES = [
+  "region", "page-has-heading-one", "html-has-lang", "landmark-one-main",
+  "bypass", "color-contrast",
+];
+
+/** Every accessibility violation axe finds in the mounted component. */
+export async function violations(mounted, { rules = {}, selector = "body" } = {}) {
+  const frame = mounted.page.frames().find((f) => f !== mounted.page.mainFrame());
+  await frame.addScriptTag({ content: AXE });
+  const off = Object.fromEntries(PAGE_RULES.map((id) => [id, { enabled: false }]));
+  return frame.evaluate(async ([target, config]) => {
+    const results = await window.axe.run(target, config);
+    return results.violations.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      help: v.help,
+      nodes: v.nodes.map((n) => n.html),
+    }));
+  }, [selector, { rules: { ...off, ...rules } }]);
+}
+
+/** Reads as the failure rather than as `[] deepEqual []`. */
+export function reportable(found) {
+  return found.map((v) => `${v.id}: ${v.help}\n    ${v.nodes.join("\n    ")}`).join("\n");
+}
 
 /** Mount one component in a sandboxed frame with an opaque origin, the way a
  *  host renders a view, and hand back a locator for it. */

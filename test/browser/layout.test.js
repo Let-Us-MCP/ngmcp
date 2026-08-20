@@ -70,7 +70,11 @@ for (const engine of ENGINES) {
       assert.equal(await c.frame.locator('[role="tab"]').count(), 3);
       assert.equal(await c.frame.locator('[role="tab"][aria-selected="true"]').count(), 1);
       assert.equal(await c.frame.locator('[role="tabpanel"]:not([hidden])').count(), 1);
-      assert.equal(await c.frame.locator('[role="tab"]').first().getAttribute("aria-controls"), "panel-one");
+      // What the id is does not matter; what it reaches does.
+      assert.equal(await c.frame.locator('[role="tab"]').first().evaluate((tab) => {
+        const panel = tab.ownerDocument.getElementById(tab.getAttribute("aria-controls"));
+        return panel?.getAttribute("role");
+      }), "tabpanel");
     } finally { await c.close(); }
   });
 
@@ -131,14 +135,80 @@ for (const engine of ENGINES) {
     document.getElementById("root").appendChild(opener);
     window.__d = d;`;
 
-  test(at("a dialog opens modally and is labelled by its title"), async () => {
+  test(at("a dialog opens modally and is labelled by its own title"), async () => {
     const c = await mount(engine, DIALOG);
     try {
       await c.frame.locator("#opener").click();
       await c.frame.locator("dialog[open]").waitFor();
       assert.equal(await c.frame.locator("dialog").evaluate((d) => d.open), true);
-      assert.equal(await c.frame.locator("#dialog-title").textContent(), "Delete four files?");
-      assert.equal(await c.frame.locator("dialog").getAttribute("aria-labelledby"), "dialog-title");
+      // The relationship, not the literal id. Asserting the id passes for a
+      // dialog whose name resolves to somebody else's heading.
+      const named = await c.frame.locator("dialog").evaluate((d) => {
+        const target = d.ownerDocument.getElementById(d.getAttribute("aria-labelledby"));
+        return { text: target?.textContent, isOwn: d.contains(target) };
+      });
+      assert.equal(named.text, "Delete four files?");
+      assert.equal(named.isOwn, true, "the dialog is named by another element's heading");
+    } finally { await c.close(); }
+  });
+
+  test(at("a second dialog is named by its own title, not the first one's"), async () => {
+    /* A view holds as many dialogs as it has decisions to ask about, and a
+     * component that mints a fixed id works alone and misnames itself the
+     * moment there are two. */
+    const c = await mount(engine, `${I}
+      const root = document.getElementById("root");
+      const first = dialog({ title: "Delete four files?",
+        content: h("p", { text: "One." }), onClose: () => {} });
+      const second = dialog({ title: "Restart checkout?",
+        content: h("p", { text: "Two." }), onClose: () => {} });
+      root.appendChild(first.el); root.appendChild(second.el);
+      window.__second = second;`);
+    try {
+      await c.frame.locator("#root").evaluate(() => window.__second.open());
+      await c.frame.locator("dialog[open]").waitFor();
+      const named = await c.frame.locator("dialog[open]").evaluate((d) => {
+        const id = d.getAttribute("aria-labelledby");
+        return {
+          announced: d.ownerDocument.getElementById(id)?.textContent,
+          shown: d.querySelector(".dialog-title").textContent,
+          sharing: d.ownerDocument.querySelectorAll(`[id="${id}"]`).length,
+        };
+      });
+      assert.equal(named.shown, "Restart checkout?");
+      assert.equal(named.announced, "Restart checkout?",
+        "the second dialog announced the first one's title");
+      assert.equal(named.sharing, 1, "two elements answer to the same id");
+    } finally { await c.close(); }
+  });
+
+  test(at("two tab groups with the same tab ids do not collide"), async () => {
+    const c = await mount(engine, `${I}
+      const root = document.getElementById("root");
+      for (const label of ["Left", "Right"]) {
+        root.appendChild(tabs({ label, tabs: [
+          { id: "one", label: label + " one", content: () => h("p", { text: "1" }) },
+          { id: "two", label: label + " two", content: () => h("p", { text: "2" }) },
+        ] }).el);
+      }`);
+    try {
+      const wiring = await c.frame.locator("#root").evaluate(() => {
+        const tabsInGroups = [...document.querySelectorAll('[role="tab"]')];
+        return tabsInGroups.map((tab) => {
+          const id = tab.getAttribute("aria-controls");
+          const panel = document.getElementById(id);
+          return {
+            sharing: document.querySelectorAll(`[id="${id}"]`).length,
+            // The panel a tab points at has to be in the same tab group.
+            sameGroup: tab.closest(".tabs") === panel?.closest(".tabs"),
+          };
+        });
+      });
+      assert.equal(wiring.length, 4);
+      for (const tab of wiring) {
+        assert.equal(tab.sharing, 1, "two panels answer to the same id");
+        assert.equal(tab.sameGroup, true, "a tab controls the other group's panel");
+      }
     } finally { await c.close(); }
   });
 

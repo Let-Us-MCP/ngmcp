@@ -26,6 +26,16 @@ export interface Props {
 export type Child = Node | string | number | null | undefined | false | Child[];
 
 /** Create an element. Attributes starting with `on` are listeners. */
+/** An id no other instance of the same component will mint.
+ *
+ * A component that hard-codes the id it points `aria-labelledby` at works
+ * alone and stops working the moment a view holds two of them: the second
+ * one's name resolves to the first one's heading, so it announces somebody
+ * else's title while showing its own. A dashboard is many of everything, so
+ * every id a component mints for its own use goes through here. */
+let sequence = 0;
+export const uid = (prefix: string): string => `${prefix}-${++sequence}`;
+
 export function h(tag: string, props: Props = {}, ...children: Child[]): HTMLElement {
   const el = document.createElement(tag);
 

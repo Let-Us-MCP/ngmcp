@@ -7,7 +7,7 @@
  * that breaks in half the places it runs.
  */
 import { computed, effect, signal, type Signal } from "../reactive.js";
-import { h, read, type Child, type Reactive } from "../dom.js";
+import { h, read, uid, type Child, type Reactive } from "../dom.js";
 
 export type Gap = "none" | "tight" | "normal" | "loose";
 export type Align = "start" | "center" | "end" | "stretch";
@@ -148,6 +148,11 @@ export function tabs(options: TabsOptions): Tabs {
   };
 
   const tabButtons = new Map<string, HTMLElement>();
+  // Tab ids are the caller's and are local to their group, so two tab sets in
+  // one view will collide on "one" unless the group has its own prefix.
+  const group = uid("tabs");
+  const tabId = (id: string) => `${group}-tab-${id}`;
+  const panelId = (id: string) => `${group}-panel-${id}`;
   const list = h("div", { class: "tablist", role: "tablist", "aria-label": label });
 
   for (const item of items) {
@@ -156,9 +161,9 @@ export function tabs(options: TabsOptions): Tabs {
       type: "button",
       class: computed(() => `tab${selected() ? " selected" : ""}`),
       role: "tab",
-      id: `tab-${item.id}`,
+      id: tabId(item.id),
       "aria-selected": computed(() => String(selected())),
-      "aria-controls": `panel-${item.id}`,
+      "aria-controls": panelId(item.id),
       // Only the selected tab is reachable with Tab; the rest with arrows.
       tabindex: computed(() => (selected() ? "0" : "-1")),
       text: item.label,
@@ -180,8 +185,8 @@ export function tabs(options: TabsOptions): Tabs {
     const panel = h("div", {
       class: "tabpanel",
       role: "tabpanel",
-      id: `panel-${item.id}`,
-      "aria-labelledby": `tab-${item.id}`,
+      id: panelId(item.id),
+      "aria-labelledby": tabId(item.id),
       tabindex: "0",
       hidden: computed(() => active() !== item.id),
     });
@@ -236,9 +241,11 @@ export function dialog(options: DialogOptions): Dialog {
   const { title, dismissible = true } = options;
   const isOpen = signal(false);
 
+  const titleId = uid("dialog-title");
+
   const el = h("dialog", {
     class: "dialog",
-    "aria-labelledby": "dialog-title",
+    "aria-labelledby": titleId,
     onclose: () => { isOpen.set(false); },
     oncancel: (event: Event) => {
       if (!dismissible) { event.preventDefault(); return; }
@@ -250,7 +257,7 @@ export function dialog(options: DialogOptions): Dialog {
       el.close();
     },
   },
-    h("h2", { class: "dialog-title", id: "dialog-title", text: title }),
+    h("h2", { class: "dialog-title", id: titleId, text: title }),
     h("div", { class: "dialog-body" }, options.content),
     options.actions?.length
       ? h("div", { class: "dialog-actions" }, ...options.actions) : null,

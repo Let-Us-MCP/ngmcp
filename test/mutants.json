@@ -350,5 +350,21 @@
     "replace": "  const filtered = computed(() => all());\n",
     "suite": "test/browser/data-table.test.js",
     "why": "The filter draws, accepts typing and changes nothing. Filtering locally is the whole claim of the pane: the rows are already here, so narrowing them must not cost a tool call, and must actually narrow them."
+  },
+  {
+    "name": "every dialog answers to the same id",
+    "file": "src/view/layout/index.ts",
+    "find": "  const titleId = uid(\"dialog-title\");\n",
+    "replace": "  const titleId = \"dialog-title\";\n",
+    "suite": "test/browser/layout.test.js",
+    "why": "One dialog is fine and two are not: the second one's aria-labelledby resolves to the first one's heading, so it announces a title it is not showing. A view has as many dialogs as it has decisions to ask about."
+  },
+  {
+    "name": "two tab groups mint the same panel ids",
+    "file": "src/view/layout/index.ts",
+    "find": "  const group = uid(\"tabs\");\n",
+    "replace": "  const group = \"tabs\";\n",
+    "suite": "test/browser/layout.test.js",
+    "why": "Tab ids are the caller's and are local to their group, so two groups both holding a tab called `one` point at each other's panels."
   }
 ]
