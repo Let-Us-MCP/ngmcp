@@ -19,7 +19,15 @@ const mutants = JSON.parse(readFileSync(path.join(ROOT, "test", "mutants.json"),
 const onlyIndex = process.argv.indexOf("--only");
 const only = onlyIndex > -1 ? process.argv[onlyIndex + 1] : null;
 
-const build = () => execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: ROOT, stdio: "pipe" });
+/* The same build the tests run against. Examples are bundled as well as
+ * compiled, because `test/browser/view.test.js` loads the bundle rather than
+ * the source: without this a mutation to the example, or to a component the
+ * example uses, would never reach the frame and would survive for a reason
+ * that has nothing to do with the test. */
+const build = () => {
+  execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: ROOT, stdio: "pipe" });
+  execFileSync(process.execPath, ["tools/build-examples.mjs"], { cwd: ROOT, stdio: "pipe" });
+};
 
 const runSuite = (suite) => {
   // A type-level suite is a script rather than a test file, because the thing

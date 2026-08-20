@@ -262,5 +262,93 @@
     "replace": "    if (false) return;",
     "suite": "test/browser/agent.test.js",
     "why": "A quiet log interrupts on a timer to say nothing happened."
+  },
+  {
+    "name": "a protocol refusal becomes a transport failure",
+    "file": "src/transport/http.ts",
+    "find": "    const status = \"error\" in response\n      && response.error.code === CODE.invalidParams ? 400 : 200;\n",
+    "replace": "    const status = \"error\" in response ? 400 : 200;\n",
+    "suite": "test/integration/http.test.js",
+    "why": "A version refusal is a well-formed answer carrying the list of versions the server does speak. Sent as a 400 it tells a proxy to retry what can never succeed, and hides that list behind a transport failure."
+  },
+  {
+    "name": "a malformed request is answered 200",
+    "file": "src/transport/http.ts",
+    "find": "    const status = \"error\" in response\n      && response.error.code === CODE.invalidParams ? 400 : 200;\n",
+    "replace": "    const status = false ? 400 : 200;\n",
+    "suite": "test/integration/http.test.js",
+    "why": "The one case the specification does put in the status line is a malformed request. Answering it 200 makes a request the server never understood indistinguishable from one it did."
+  },
+  {
+    "name": "a GET is answered like a POST",
+    "file": "src/transport/http.ts",
+    "find": "    if (request.method !== \"POST\") {\n",
+    "replace": "    if (false) {\n",
+    "suite": "test/integration/http.test.js",
+    "why": "2026-07-28 removed the GET endpoint along with sessions. A GET that falls through to the POST path answers a parse error instead of saying the method is not there."
+  },
+  {
+    "name": "a failed tool is handed to the view as a shape",
+    "file": "src/view/client.ts",
+    "find": "        if (result.isError) {\n          throw new ToolError(property, text ?? \"The tool failed.\");\n        }\n",
+    "replace": "",
+    "suite": "test/integration/contract.test.js",
+    "why": "The failure then arrives as an undefined `structuredContent`, which is the `?? []` the contract exists to delete. A tool that failed must raise, so the view cannot read a shape that was never returned."
+  },
+  {
+    "name": "arguments never reach the server",
+    "file": "src/view/client.ts",
+    "find": "        const result = await bridge.callServerTool(property, input);\n",
+    "replace": "        const result = await bridge.callServerTool(property, {});\n",
+    "suite": "test/integration/contract.test.js",
+    "why": "The typed call still type-checks and still resolves, and every filter, id and page argument a view sends is silently dropped on the way to the tool."
+  },
+  {
+    "name": "the sentence for the model never reaches the view",
+    "file": "src/view/client.ts",
+    "find": "        if (text) onText?.(property, text);\n",
+    "replace": "        if (false) onText?.(property, text);\n",
+    "suite": "test/integration/contract.test.js",
+    "why": "`content` and `structuredContent` are the two halves of one answer. A view that cannot see what the model was told cannot keep the two in agreement."
+  },
+  {
+    "name": "the dev host cannot refuse",
+    "file": "src/dev/host.ts",
+    "find": "    if (document.getElementById(\"deny\").checked) {\n      document.getElementById(\"deny\").checked = false;\n      line(\"out\", \"refused by the dev host\");\n      frame.postMessage({ __id: data.__id, error: \"The host refused that.\" }, \"*\");\n      return;\n    }\n",
+    "replace": "",
+    "suite": "test/browser/dev-host.test.js",
+    "why": "A dev host that only ever succeeds teaches an application to assume it always will, and the first refusal then happens in front of a user. The switch is the reason this file exists."
+  },
+  {
+    "name": "the dev host logs only its own side of the conversation",
+    "file": "src/dev/host.ts",
+    "find": "    line(\"in\", data.__call + \" \" + JSON.stringify(data.args ?? {}));\n",
+    "replace": "",
+    "suite": "test/browser/dev-host.test.js",
+    "why": "What the view asked for disappears and only the answer is shown, so a call with the wrong arguments looks like a server that answered wrongly."
+  },
+  {
+    "name": "the host frame is given allow-same-origin",
+    "file": "test/browser/harness.mjs",
+    "find": "<iframe id=\"view\" sandbox=\"allow-scripts\" style=\"width:100%;height:600px;border:0\"></iframe>\n",
+    "replace": "<iframe id=\"view\" sandbox=\"allow-scripts allow-same-origin\" style=\"width:100%;height:600px;border:0\"></iframe>\n",
+    "suite": "test/browser/view.test.js",
+    "why": "Every claim a view makes about the sandbox rests on the frame having an opaque origin. Weakening it changes nothing visible, which is exactly why the suite has to fail rather than the property quietly going away."
+  },
+  {
+    "name": "the action that needs a selection is offered without one",
+    "file": "examples/data-explorer/view.ts",
+    "find": "  disabled: () => table.selected().length === 0,\n",
+    "replace": "  disabled: false,\n",
+    "suite": "test/browser/view.test.js",
+    "why": "Restart is enabled with nothing selected, so activating it reads `table.selected()[0]`, finds nothing and returns having done nothing. A control that is offered has to do something."
+  },
+  {
+    "name": "the filter never narrows the rows",
+    "file": "src/view/panes/data-table.ts",
+    "find": "  const filtered = computed(() => {\n    const term = filter().trim().toLowerCase();\n    const rows = all();\n    if (!term) return rows;\n    return rows.filter((row) => columns.some((column) => {\n      const value = cell(row, column.key);\n      return value !== null && value !== undefined\n        && String(value).toLowerCase().includes(term);\n    }));\n  });\n",
+    "replace": "  const filtered = computed(() => all());\n",
+    "suite": "test/browser/data-table.test.js",
+    "why": "The filter draws, accepts typing and changes nothing. Filtering locally is the whole claim of the pane: the rows are already here, so narrowing them must not cost a tool call, and must actually narrow them."
   }
 ]

@@ -75,9 +75,16 @@ for (const name of NAMES) {
       const page = await browser.newPage();
       await page.goto(host.url);
       await page.frameLocator("#view").locator("html[data-ready='1']").waitFor({ timeout: 15000 });
-      const log = await page.locator("#log").textContent();
-      assert.match(log, /rows/);
-      assert.match(log, /structuredContent/);
+      // Both halves, asserted separately. Matching `rows` against the whole log
+      // proves nothing: the answer contains the word too, so a log that had
+      // dropped the request entirely would still pass.
+      const lines = await page.locator("#log .row").allTextContents();
+      const inbound = lines.filter((l) => l.startsWith("\u2192"));
+      const outbound = lines.filter((l) => l.startsWith("\u2190"));
+      assert.equal(inbound.length, 1, "the view's request was not logged");
+      assert.match(inbound[0], /rows/);
+      assert.equal(outbound.length, 1, "the host's answer was not logged");
+      assert.match(outbound[0], /structuredContent/);
     } finally { await browser.close(); await host.close(); }
   });
 }

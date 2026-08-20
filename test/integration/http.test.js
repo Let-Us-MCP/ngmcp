@@ -73,10 +73,16 @@ test("a request missing its _meta is a 400, as the specification says on HTTP", 
 
 test("an older protocol version is refused with -32022", async () => {
   await withServer(async (base) => {
-    const body = await (await post(base, {
+    const response = await post(base, {
       jsonrpc: "2.0", id: 1, method: "tools/list",
       params: { _meta: meta({ "io.modelcontextprotocol/protocolVersion": "2025-11-25" }) },
-    })).json();
+    });
+    // The refusal is a well-formed answer, so it travels as one: 200 with the
+    // error in the body, which is what JSON-RPC intends. A transport status
+    // here would tell a proxy to retry something that can never succeed, and
+    // would hide the `supported` list behind an error page.
+    assert.equal(response.status, 200, "a protocol refusal became a transport failure");
+    const body = await response.json();
     assert.equal(body.error.code, -32022);
     assert.deepEqual(body.error.data.supported, [V]);
   });
