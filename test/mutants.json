@@ -78,5 +78,45 @@
     "replace": "  if (!schema) return null as unknown as JsonSchema;",
     "suite": "test/unit/registry.test.js",
     "why": "inputSchema MUST be a JSON Schema object and MUST NOT be null."
+  },
+  {
+    "name": "the table sorts numbers as text",
+    "file": "src/view/panes/data-table.ts",
+    "find": "  if (typeof a === \"number\" && typeof b === \"number\") return a - b;\n",
+    "replace": "",
+    "suite": "test/browser/data-table.test.js",
+    "why": "12 sorts after 143, which is the commonest table bug there is."
+  },
+  {
+    "name": "selection is not keyed to a stable row id",
+    "file": "src/view/panes/data-table.ts",
+    "find": "const defaultId = (row: Row): string =>\n  String(row[\"id\"] ?? JSON.stringify(row));",
+    "replace": "let counter = 0;\nconst defaultId = (_row: Row): string => String(counter++);",
+    "suite": "test/browser/data-table.test.js",
+    "why": "Selection is dropped whenever the row list is rebuilt, which filtering does."
+  },
+  {
+    "name": "a row cannot be selected from the keyboard",
+    "file": "src/view/panes/data-table.ts",
+    "find": "        if (event.key !== \"Enter\" && event.key !== \" \") return;\n        event.preventDefault();\n        toggle(row);",
+    "replace": "        return;",
+    "suite": "test/browser/data-table.test.js",
+    "why": "The table is operable by pointer only, which excludes anyone not using one."
+  },
+  {
+    "name": "aria-sort is not cleared from the other columns",
+    "file": "src/view/panes/data-table.ts",
+    "find": "    const sortState = computed(() =>\n      sortKey() === column.key ? sortDirection() : \"none\");",
+    "replace": "    const sortState = computed(() => sortDirection());",
+    "suite": "test/browser/data-table.test.js",
+    "why": "Every column claims to be the sorted one, so a screen reader is told three contradictory things."
+  },
+  {
+    "name": "an effect tracks a branch it did not take",
+    "file": "src/view/reactive.ts",
+    "find": "      if (this.disposed) return;\n      dispose(this);",
+    "replace": "      if (this.disposed) return;",
+    "suite": "test/unit/reactive.test.js",
+    "why": "Dependencies accumulate instead of being re-collected, so unrelated changes cause renders. That is the rerun model with extra steps."
   }
 ]
