@@ -11,9 +11,16 @@ import {
   Limiter, RequestLifetime, systemClock, type Clock,
 } from "./concurrency.js";
 import { InFlight, RequestNotifier, type Backpressure, type Sink } from "./notifications.js";
+import { Outbound } from "./outbound.js";
 import {
-  toolDescriptor, validate, viewContents,
-  type Context, type RegisteredTool, type ResourceDefinition, type ViewDefinition,
+  Subscriptions, agreed, SUBSCRIPTION_ID,
+  type SubscriptionFilter,
+} from "./subscriptions.js";
+import {
+  toolDescriptor, promptDescriptor, validate, viewContents,
+  type Context, type ElicitOutcome, type ElicitRequest, type RegisteredPrompt,
+  type RegisteredTool, type ResourceDefinition, type SampleOutcome,
+  type SampleRequest, type ViewDefinition,
 } from "./registry.js";
 
 export interface DispatcherOptions {
@@ -23,6 +30,7 @@ export interface DispatcherOptions {
   tools: Map<string, RegisteredTool>;
   views: Map<string, ViewDefinition>;
   resources: Map<string, ResourceDefinition>;
+  prompts?: Map<string, RegisteredPrompt>;
   /** Zero means unbounded, which statelessness makes a reasonable default. */
   concurrency?: number;
   defaultTimeoutMs?: number;
@@ -32,6 +40,11 @@ export interface DispatcherOptions {
 
 /** Raised when a request dies while queued, so it never reaches its handler. */
 class AbortedBeforeStart extends Error {}
+
+/* Identity matters: a dispatcher with this sink still attached is one no
+ * transport has wired up, which is how `subscriptions/listen` can tell that
+ * there is nowhere for a stream to go. */
+const NO_SINK: Sink = () => {};
 
 const ok = (id: Id, result: Record<string, unknown>): Success =>
   ({ jsonrpc: "2.0", id, result });
@@ -50,7 +63,12 @@ const err = (id: Id | null, code: number, message: string, data?: unknown): Fail
 export class Dispatcher {
   readonly #limiter: Limiter;
   readonly inFlight = new InFlight();
-  #sink: Sink = () => {};
+  /** Questions this server has asked the client and is still waiting on. Each
+   *  belongs to one in-flight request and dies with it. */
+  readonly outbound = new Outbound();
+  /** Open `subscriptions/listen` streams, which are in-flight requests too. */
+  readonly subscriptions = new Subscriptions();
+  #sink: Sink = NO_SINK;
   #backpressure: Backpressure | undefined;
 
   constructor(private readonly options: DispatcherOptions) {
@@ -67,14 +85,38 @@ export class Dispatcher {
    *  exists and one that runs. */
   set backpressure(backpressure: Backpressure) { this.#backpressure = backpressure; }
 
+  get #prompts(): Map<string, RegisteredPrompt> {
+    return this.options.prompts ?? new Map();
+  }
+
   get capabilities(): Record<string, unknown> {
     return {
-      tools: { listChanged: false },
-      resources: { listChanged: false },
+      // `listChanged: true` is what makes the matching `subscriptions/listen`
+      // filter honourable, so it is declared for what this server can actually
+      // tell a client about and withheld for what it cannot.
+      tools: { listChanged: true },
+      resources: { listChanged: true },
+      ...(this.#prompts.size ? { prompts: { listChanged: true } } : {}),
       extensions: {
         [UI_EXTENSION]: { mimeTypes: [APP_MIME] },
       },
     };
+  }
+
+  /** Tell every subscription that asked. Nothing reaches a client that did not.
+   *
+   * Returns how many notifications went out, which is per subscription rather
+   * than per client: the tag differs, and a client uses it to work out which of
+   * its streams a message belongs to. */
+  notify(method: string, params: Record<string, unknown> = {}): number {
+    const notes = this.subscriptions.match(method, params);
+    for (const note of notes) this.#sink(note);
+    return notes.length;
+  }
+
+  /** A resource changed. Only the clients watching that uri hear about it. */
+  resourceUpdated(uri: string): number {
+    return this.notify("notifications/resources/updated", { uri });
   }
 
   /** Handle one incoming message. Returns null for notifications. */
@@ -137,6 +179,17 @@ export class Dispatcher {
       case "tools/call":
         return await this.#call(id, params, meta);
 
+      case "prompts/list":
+        return ok(id, {
+          prompts: [...this.#prompts.values()].map(promptDescriptor),
+        });
+
+      case "prompts/get":
+        return await this.#prompt(id, params, meta);
+
+      case "subscriptions/listen":
+        return await this.#listen(id, params);
+
       default:
         return err(id, CODE.methodNotFound, `Method not found: ${method}`);
     }
@@ -174,6 +227,171 @@ export class Dispatcher {
     return { uri, ...body };
   }
 
+  async #prompt(
+    id: Id,
+    params: Record<string, unknown>,
+    meta: ReturnType<typeof parseMeta>,
+  ): Promise<Response> {
+    const name = params["name"];
+    if (typeof name !== "string") {
+      throw new RpcError(CODE.invalidParams, "prompts/get needs a prompt name");
+    }
+    const prompt = this.#prompts.get(name);
+    // Same code as a missing resource, for the same reason: -32002 is retired
+    // in this version and a missing thing is a bad parameter.
+    if (!prompt) throw new RpcError(CODE.invalidParams, `Unknown prompt: ${name}`);
+
+    const lifetime = new RequestLifetime(
+      this.options.defaultTimeoutMs ?? 0, this.options.clock ?? systemClock);
+    this.inFlight.add(id, lifetime);
+    try {
+      const messages = await prompt.handler(
+        (params["arguments"] ?? {}) as Record<string, string>,
+        this.#context(id, lifetime, meta, new RequestNotifier(
+          this.#sink, lifetime, meta.progressToken, meta.logLevel, this.#backpressure)),
+      );
+      return ok(id, {
+        ...(prompt.definition.description
+          ? { description: prompt.definition.description } : {}),
+        messages,
+      });
+    } finally {
+      lifetime.settle();
+      this.inFlight.remove(id);
+    }
+  }
+
+  /** Open a notification stream, and do not answer until it is torn down.
+   *
+   * The request stays in flight for the life of the subscription, which is
+   * exactly what it is: a request that has not been answered yet. It is
+   * cancellable the same way as any other, and when it ends nothing is left
+   * behind for the next request to find.
+   */
+  async #listen(id: Id, params: Record<string, unknown>): Promise<Response> {
+    const wanted = (params["notifications"] ?? {}) as SubscriptionFilter;
+    if (typeof wanted !== "object" || wanted === null) {
+      throw new RpcError(CODE.invalidParams,
+        "subscriptions/listen needs a notifications filter");
+    }
+    // A transport with no way to push cannot carry a stream, and a client left
+    // holding a request that will never speak is worse than being told.
+    if (!this.streams) {
+      throw new RpcError(CODE.invalidRequest,
+        "This transport carries no notification stream, so subscriptions/listen "
+        + "cannot be served on it. Connect over a transport that does.");
+    }
+
+    const honoured = agreed(wanted, {
+      tools: true,
+      resources: true,
+      prompts: this.#prompts.size > 0,
+    });
+
+    const lifetime = new RequestLifetime(0, this.options.clock ?? systemClock);
+    this.inFlight.add(id, lifetime);
+    const ended = this.subscriptions.open(id, honoured);
+    // First message on the stream, before anything else carrying this id.
+    this.#sink(this.subscriptions.acknowledgement(id, honoured));
+
+    // A cancelled subscription is a closed stream, and the response that
+    // closes it is the one the client has been holding all along.
+    const onAbort = () => this.subscriptions.close(id);
+    lifetime.signal.addEventListener("abort", onAbort, { once: true });
+
+    try {
+      return ok(id, await ended);
+    } finally {
+      lifetime.signal.removeEventListener("abort", onAbort);
+      this.subscriptions.close(id);
+      lifetime.settle();
+      this.inFlight.remove(id);
+    }
+  }
+
+  /** Whether this dispatcher is attached to something that can push. */
+  get streams(): boolean { return this.#sink !== NO_SINK; }
+
+  #context(
+    id: Id,
+    lifetime: RequestLifetime,
+    meta: ReturnType<typeof parseMeta>,
+    notifier: RequestNotifier,
+  ): Context {
+    return {
+      signal: lifetime.signal,
+      requestId: id,
+      client: meta.clientInfo,
+      capabilities: meta.clientCapabilities,
+      meta,
+      progress: (progress, total, message) => notifier.progress(progress, total, message),
+      log: (level, data) => notifier.log(level, data),
+      elicit: (request) => this.#elicit(request, meta, lifetime),
+      sample: (request) => this.#sample(request, meta, lifetime),
+    };
+  }
+
+  async #elicit(
+    request: ElicitRequest,
+    meta: ReturnType<typeof parseMeta>,
+    lifetime: RequestLifetime,
+  ): Promise<ElicitOutcome> {
+    // Absent is not refused. A client that never declared elicitation is not
+    // saying no, it is saying it has no way to ask anybody, and a handler
+    // usually wants a different answer in the two cases.
+    const declared = (meta.clientCapabilities as Record<string, unknown>)["elicitation"];
+    if (!declared) {
+      return { action: "unavailable", reason: "This client offers no elicitation." };
+    }
+    const answer = await this.outbound.ask(
+      "elicitation/create",
+      { mode: "form", message: request.message, requestedSchema: request.requestedSchema },
+      lifetime.signal,
+    );
+    if (answer.error) {
+      return { action: "unavailable", reason: answer.error.message };
+    }
+    const action = answer.result?.["action"];
+    if (action === "accept") {
+      return {
+        action: "accept",
+        content: (answer.result?.["content"] ?? {}) as Record<
+          string, string | number | boolean | string[]>,
+      };
+    }
+    if (action === "decline") return { action: "decline" };
+    return { action: "cancel" };
+  }
+
+  async #sample(
+    request: SampleRequest,
+    meta: ReturnType<typeof parseMeta>,
+    lifetime: RequestLifetime,
+  ): Promise<SampleOutcome> {
+    const declared = (meta.clientCapabilities as Record<string, unknown>)["sampling"];
+    if (!declared) {
+      return { ok: false, reason: "absent", detail: "This client offers no sampling." };
+    }
+    const answer = await this.outbound.ask(
+      "sampling/createMessage",
+      { ...request } as Record<string, unknown>,
+      lifetime.signal,
+    );
+    if (answer.error) {
+      return { ok: false, reason: "refused", detail: answer.error.message };
+    }
+    const result = answer.result ?? {};
+    return {
+      ok: true,
+      model: String(result["model"] ?? ""),
+      role: (result["role"] as "user" | "assistant") ?? "assistant",
+      content: (result["content"] ?? { type: "text", text: "" }) as
+        { type: string; text?: string },
+      ...(result["stopReason"] !== undefined
+        ? { stopReason: String(result["stopReason"]) } : {}),
+    };
+  }
+
   async #call(
     id: Id,
     params: Record<string, unknown>,
@@ -197,15 +415,7 @@ export class Dispatcher {
     );
     this.inFlight.add(id, lifetime);
 
-    const context: Context = {
-      signal: lifetime.signal,
-      requestId: id,
-      client: meta.clientInfo,
-      capabilities: meta.clientCapabilities,
-      meta,
-      progress: (progress, total, message) => notifier.progress(progress, total, message),
-      log: (level, data) => notifier.log(level, data),
-    };
+    const context: Context = this.#context(id, lifetime, meta, notifier);
 
     try {
       const input = await validate(tool.definition.input, params["arguments"] ?? {});

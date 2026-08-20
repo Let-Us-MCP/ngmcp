@@ -598,5 +598,109 @@
     "replace": "          try { ready = (await handler()) !== false; }\n          catch { ready = false; }",
     "suite": "test/browser/surface.test.js",
     "why": "The last handler to run decides, so an objection is overwritten by any handler registered after it."
+  },
+  {
+    "name": "a client is asked for elicitation it never offered",
+    "file": "src/runtime/dispatch.ts",
+    "find": "    const declared = (meta.clientCapabilities as Record<string, unknown>)[\"elicitation\"];\n    if (!declared) {\n      return { action: \"unavailable\", reason: \"This client offers no elicitation.\" };\n    }",
+    "replace": "",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "The server sends a question to a client with no way to put it to anybody, and reads the rejection back as a refusal. Absent and refused want different handling: one takes a fallback, the other takes an explanation."
+  },
+  {
+    "name": "a declined elicitation is read as an acceptance",
+    "file": "src/runtime/dispatch.ts",
+    "find": "    if (action === \"decline\") return { action: \"decline\" };\n    return { action: \"cancel\" };",
+    "replace": "    return { action: \"decline\" };",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "Cancel and decline stop being distinguishable, so a person who dismissed a dialog without choosing is recorded as having refused."
+  },
+  {
+    "name": "a server-minted id can collide with a client's",
+    "file": "src/runtime/outbound.ts",
+    "find": "    const id: Id = `srv-${++this.#counter}`;",
+    "replace": "    const id: Id = this.#counter += 1;",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "The id is the only thing on the wire that tells the two directions apart. A server asking with id 1 while the client has a request 1 open makes one of the two answers land on the wrong request."
+  },
+  {
+    "name": "a question outlives the request that asked it",
+    "file": "src/runtime/outbound.ts",
+    "find": "      if (signal.aborted) {\n        resolve({ error: { code: -32800, message: `The request was ${reasonOf(signal)}.` } });\n        return;\n      }\n      signal.addEventListener(\"abort\", onAbort, { once: true });",
+    "replace": "",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "A tool call that was cancelled leaves its question pending forever, so the entry is connection state after all: something that outlives the request that made it."
+  },
+  {
+    "name": "a subscription is acknowledged after the fact",
+    "file": "src/runtime/dispatch.ts",
+    "find": "    const ended = this.subscriptions.open(id, honoured);\n    // First message on the stream, before anything else carrying this id.\n    this.#sink(this.subscriptions.acknowledgement(id, honoured));",
+    "replace": "    const ended = this.subscriptions.open(id, honoured);",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "The acknowledgement MUST be the first message carrying the subscription's id. Without it the client cannot tell an established stream from one the server never opened."
+  },
+  {
+    "name": "the acknowledgement claims everything that was asked for",
+    "file": "src/runtime/dispatch.ts",
+    "find": "    const honoured = agreed(wanted, {\n      tools: true,\n      resources: true,\n      prompts: this.#prompts.size > 0,\n    });",
+    "replace": "    const honoured = wanted;",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "A client that asked a server with no prompts for prompt changes is told it will get them, and then waits for something that cannot arrive."
+  },
+  {
+    "name": "the subscription filter is a hint rather than an allow list",
+    "file": "src/runtime/subscriptions.ts",
+    "find": "      if (!wants(entry.filter, method, params)) continue;",
+    "replace": "",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "The specification says the server MUST NOT send notification types the client did not request. Sending everything to everybody produces traffic a client cannot attribute to anything, and leaks which resources other clients are watching."
+  },
+  {
+    "name": "an empty resource list is treated as a wildcard",
+    "file": "src/runtime/subscriptions.ts",
+    "find": "    return typeof uri === \"string\"\n      && (filter.resourceSubscriptions ?? []).includes(uri);",
+    "replace": "    return typeof uri === \"string\"\n      && (filter.resourceSubscriptions ?? []).length !== 1;",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "A client that named one resource is sent updates for every other one as well. Naming a resource is the opt-in; anything else is the server deciding what the client wanted."
+  },
+  {
+    "name": "a notification is not tagged with its subscription",
+    "file": "src/runtime/subscriptions.ts",
+    "find": "          _meta: {\n            ...(params[\"_meta\"] as Record<string, unknown> ?? {}),\n            [SUBSCRIPTION_ID]: entry.id,\n          },",
+    "replace": "          _meta: { ...(params[\"_meta\"] as Record<string, unknown> ?? {}) },",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "A client with two streams open cannot tell which of them a notification belongs to, which is the whole reason the id is on every message."
+  },
+  {
+    "name": "a cancelled subscription is never answered",
+    "file": "src/runtime/dispatch.ts",
+    "find": "    const onAbort = () => this.subscriptions.close(id);\n    lifetime.signal.addEventListener(\"abort\", onAbort, { once: true });",
+    "replace": "",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "The client cancels, the server stops sending, and the request it has been holding since it opened the stream is never closed."
+  },
+  {
+    "name": "a transport with no stream accepts a subscription anyway",
+    "file": "src/runtime/dispatch.ts",
+    "find": "    if (!this.streams) {\n      throw new RpcError(CODE.invalidRequest,\n        \"This transport carries no notification stream, so subscriptions/listen \"\n        + \"cannot be served on it. Connect over a transport that does.\");\n    }",
+    "replace": "",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "Over a single HTTP response the client is left holding a request that will never speak and never answer, which is the worst of the available failures."
+  },
+  {
+    "name": "a missing prompt uses the retired code",
+    "file": "src/runtime/dispatch.ts",
+    "find": "    if (!prompt) throw new RpcError(CODE.invalidParams, `Unknown prompt: ${name}`);",
+    "replace": "    if (!prompt) throw new RpcError(-32002, `Unknown prompt: ${name}`);",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "-32002 was retired with 2025-11-25 and this version forbids emitting it at all."
+  },
+  {
+    "name": "a server with no prompts claims it can report changes to them",
+    "file": "src/runtime/dispatch.ts",
+    "find": "      ...(this.#prompts.size ? { prompts: { listChanged: true } } : {}),",
+    "replace": "      prompts: { listChanged: true },",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "The capability is what makes the matching subscription filter honourable. Declaring it without prompts invites a client to subscribe to something that can never happen."
   }
 ]

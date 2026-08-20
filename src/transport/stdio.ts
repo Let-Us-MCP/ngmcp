@@ -1,5 +1,6 @@
 import type { Dispatcher } from "../runtime/dispatch.js";
-import type { Incoming, Notification, Response } from "../protocol/jsonrpc.js";
+import type { Incoming, Notification, Request, Response } from "../protocol/jsonrpc.js";
+import { isAnswer } from "../runtime/outbound.js";
 import { CODE } from "../protocol/errors.js";
 import type { Backpressure } from "../runtime/notifications.js";
 import type { Readable, Writable } from "node:stream";
@@ -52,6 +53,12 @@ export class StdioTransport {
     this.dispatcher.sink = (note: Notification) => this.#write(stdout, note);
     this.dispatcher.backpressure = this.backpressure(
       this.options.highWaterMark ?? 64 * 1024);
+    // A pipe is open in both directions, so this transport can carry a
+    // question to the client as well as an answer back. Elicitation and
+    // sampling exist here and are honestly unavailable where they do not.
+    this.dispatcher.outbound.channel = {
+      send: (request: Request) => this.#write(stdout, request as unknown as Notification),
+    };
     stdout.on("error", () => { /* the host went away mid-write */ });
 
     stdin.on("data", (chunk: Buffer | string) => {
@@ -68,6 +75,8 @@ export class StdioTransport {
     // specification says to treat it exactly that way.
     const gone = () => {
       this.dispatcher.inFlight.cancelAll("closed");
+      this.dispatcher.subscriptions.closeAll();
+      this.dispatcher.outbound.closeAll("closed");
       if (this.options.exitOnClose !== false) {
         const exit = this.options.exit ?? ((code: number) => process.exit(code));
         // One turn, so an abort handler that is mid-resolve can finish.
@@ -89,6 +98,19 @@ export class StdioTransport {
       } as unknown as Notification);
       return;
     }
+    // An answer to something this server asked, rather than a new request. It
+    // carries an id and no method, which is the only thing on the wire that
+    // tells the two directions apart.
+    if (isAnswer(message)) {
+      const answer: { result?: Record<string, unknown>; error?: { code: number; message: string } } = {};
+      if (message.result !== undefined) answer.result = message.result;
+      if (message.error !== undefined) answer.error = message.error;
+      if (this.dispatcher.outbound.deliver(message.id, answer)) return;
+      // Nobody is waiting for it. Answering an answer would be a message the
+      // client cannot attribute to anything, so it is dropped.
+      return;
+    }
+
     // Dispatched, not awaited: this is where concurrency actually happens.
     void this.dispatcher.handle(message).then(
       (response) => { if (response) this.#write(stdout, response as unknown as Notification); },

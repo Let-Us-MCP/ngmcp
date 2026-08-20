@@ -2,7 +2,8 @@ import { Dispatcher, type DispatcherOptions } from "./runtime/dispatch.js";
 import { StdioTransport } from "./transport/stdio.js";
 import { httpHandler, serveHttp, type HttpHandlerOptions } from "./transport/http.js";
 import type {
-  Context, RegisteredTool, ResourceDefinition, Schema, ToolDefinition, ViewDefinition,
+  Context, PromptDefinition, PromptMessage, RegisteredPrompt, RegisteredTool,
+  ResourceDefinition, Schema, ToolDefinition, ViewDefinition,
 } from "./runtime/registry.js";
 import type { Incoming, Response as RpcResponse } from "./protocol/jsonrpc.js";
 
@@ -38,6 +39,7 @@ export class App {
   readonly #tools = new Map<string, RegisteredTool>();
   readonly #views = new Map<string, ViewDefinition>();
   readonly #resources = new Map<string, ResourceDefinition>();
+  readonly #prompts = new Map<string, RegisteredPrompt>();
   #dispatcher: Dispatcher | null = null;
 
   constructor(private readonly options: AppOptions) {}
@@ -110,6 +112,39 @@ export class App {
     return this;
   }
 
+  /** Register a prompt: text a person chose, handed to a model.
+   *
+   * Stateless like everything else here. `prompts/get` carries its arguments,
+   * so nothing is remembered between listing a prompt and filling it in. */
+  prompt(
+    name: string,
+    definition: Omit<PromptDefinition, "name">,
+    handler: (
+      args: Record<string, string>, context: Context,
+    ) => PromptMessage[] | Promise<PromptMessage[]>,
+  ): this {
+    if (this.#prompts.has(name)) {
+      throw new Error(`Prompt already registered: ${name}`);
+    }
+    this.#prompts.set(name, { name, definition: { ...definition, name }, handler });
+    return this;
+  }
+
+  /** Tell every subscription watching this uri that it changed.
+   *
+   * The route by which a dashboard panel updates without a conversation turn.
+   * Nothing reaches a client that did not ask for it: a client with no
+   * matching `subscriptions/listen` filter hears nothing, and this returns
+   * how many notifications actually went out. */
+  resourceUpdated(uri: string): number {
+    return this.dispatcher.resourceUpdated(uri);
+  }
+
+  /** The same, for the three list-changed notifications. */
+  listChanged(what: "tools" | "prompts" | "resources"): number {
+    return this.dispatcher.notify(`notifications/${what}/list_changed`);
+  }
+
   /** Register a plain resource. */
   resource(uri: string, resource: Omit<ResourceDefinition, "uri">): string {
     this.#resources.set(uri, { uri, ...resource });
@@ -129,6 +164,7 @@ export class App {
         tools: this.#tools,
         views: this.#views,
         resources: this.#resources,
+        prompts: this.#prompts,
         concurrency: this.options.concurrency ?? 0,
         defaultTimeoutMs: this.options.defaultTimeoutMs ?? 0,
       };
@@ -164,4 +200,6 @@ export class App {
   }
 }
 
-export type { Context, ToolDefinition, ViewDefinition, Schema };
+export type {
+  Context, ToolDefinition, ViewDefinition, Schema, PromptDefinition, PromptMessage,
+};

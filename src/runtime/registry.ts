@@ -39,7 +39,51 @@ export interface Context {
   readonly meta: RequestMeta;
   progress(progress: number, total?: number, message?: string): void;
   log(level: "debug" | "info" | "warning" | "error", data: unknown): void;
+  /** Ask the person, through the client, and wait for what they say.
+   *
+   * Three answers plus one: accept, decline and cancel are the person's, and
+   * `unavailable` is the client's, for a host that never offered elicitation
+   * or a transport with no way back. A handler that treats the fourth as a
+   * decline is making a decision on somebody's behalf. */
+  elicit(request: ElicitRequest): Promise<ElicitOutcome>;
+  /** Ask the client's model for a completion. Same shape of answer, and the
+   *  same reason for it. */
+  sample(request: SampleRequest): Promise<SampleOutcome>;
 }
+
+export interface ElicitRequest {
+  message: string;
+  /** Primitive properties only: the specification does not allow nesting. */
+  requestedSchema: {
+    type: "object";
+    properties: Record<string, Record<string, unknown>>;
+    required?: string[];
+  };
+}
+
+export type ElicitOutcome =
+  | { action: "accept"; content: Record<string, string | number | boolean | string[]> }
+  | { action: "decline" }
+  | { action: "cancel" }
+  | { action: "unavailable"; reason: string };
+
+export interface SampleRequest {
+  messages: Array<{ role: "user" | "assistant"; content: { type: string; text?: string } }>;
+  systemPrompt?: string;
+  maxTokens?: number;
+  temperature?: number;
+  modelPreferences?: Record<string, unknown>;
+}
+
+export type SampleOutcome =
+  | {
+      ok: true;
+      model: string;
+      role: "user" | "assistant";
+      content: { type: string; text?: string };
+      stopReason?: string;
+    }
+  | { ok: false; reason: "absent" | "refused"; detail: string };
 
 export interface ToolAnnotations {
   readOnlyHint?: boolean;
@@ -79,6 +123,47 @@ export interface ViewDefinition {
   csp?: Record<string, unknown>;
   prefersBorder?: boolean;
   [key: string]: unknown;
+}
+
+export interface PromptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+}
+
+/** A prompt the server offers, and what it needs to be filled in.
+ *
+ * Prompts are the one primitive here with no view: they are text a person
+ * chose, handed to a model. They are stateless in the same way everything else
+ * is, because `prompts/get` carries its own arguments. */
+export interface PromptDefinition {
+  name: string;
+  title?: string;
+  description?: string;
+  arguments?: PromptArgument[];
+}
+
+export interface PromptMessage {
+  role: "user" | "assistant";
+  content: { type: string; text?: string; [key: string]: unknown };
+}
+
+export interface RegisteredPrompt {
+  name: string;
+  definition: PromptDefinition;
+  handler: (
+    args: Record<string, string>, context: Context,
+  ) => PromptMessage[] | Promise<PromptMessage[]>;
+}
+
+export function promptDescriptor(prompt: RegisteredPrompt): Record<string, unknown> {
+  const { definition } = prompt;
+  return {
+    name: prompt.name,
+    ...(definition.title ? { title: definition.title } : {}),
+    ...(definition.description ? { description: definition.description } : {}),
+    ...(definition.arguments?.length ? { arguments: definition.arguments } : {}),
+  };
 }
 
 export interface ResourceDefinition {
