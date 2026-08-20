@@ -98,6 +98,32 @@ for (const engine of ENGINES) {
     } finally { await c.close(); }
   });
 
+  test(at("two buttons do not share the message that describes them"), async () => {
+    /* A view has as many buttons as it has operations. With a fixed id, every
+     * button's `aria-describedby` resolves to the first one's message, so a
+     * reader is told about a refusal that happened somewhere else. */
+    const c = await mount(engine, `${I}
+      const root = document.getElementById("root");
+      root.appendChild(button({ label: "First",
+        onActivate: () => { throw new Error("The first one failed."); } }).el);
+      root.appendChild(button({ label: "Second",
+        onActivate: () => { throw new Error("The second one failed."); } }).el);`);
+    try {
+      await c.frame.locator(".btn").filter({ hasText: "Second" }).click();
+      const described = await c.frame.locator(".btn").filter({ hasText: "Second" })
+        .evaluate((el) => {
+          const id = el.getAttribute("aria-describedby");
+          return {
+            text: el.ownerDocument.getElementById(id)?.textContent,
+            sharing: el.ownerDocument.querySelectorAll(`[id="${id}"]`).length,
+          };
+        });
+      assert.equal(described.text, "The second one failed.",
+        "the button is described by another button's message");
+      assert.equal(described.sharing, 1, "two messages answer to the same id");
+    } finally { await c.close(); }
+  });
+
   /* Form: prefill is not submission. */
 
   const FORM = FORM_SRC;

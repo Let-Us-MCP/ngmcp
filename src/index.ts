@@ -9,6 +9,8 @@ export type { ComposeOptions, Upstream, UpstreamTransport } from "./compose.js";
 export { Dispatcher } from "./runtime/dispatch.js";
 export { StdioTransport } from "./transport/stdio.js";
 export { httpHandler, serveHttp } from "./transport/http.js";
+export { legacyBridge } from "./transport/legacy.js";
+export type { LegacyOptions } from "./transport/legacy.js";
 export { devHost } from "./dev/host.js";
 export type { DevHostOptions } from "./dev/host.js";
 export type { HttpHandlerOptions } from "./transport/http.js";

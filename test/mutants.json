@@ -758,5 +758,37 @@
     "replace": "      await this.#upstreams[0]?.transport.request(message as Request, signal)\n        .catch(() => undefined);\n      return null;",
     "suite": "test/integration/compose.test.js",
     "why": "The gateway does not know which upstream is running the request being cancelled, because knowing that would be the per-caller state it refuses to keep. Telling one of them leaves the rest running work nobody is waiting for."
+  },
+  {
+    "name": "every button answers to the same error id",
+    "file": "src/view/widgets/button.ts",
+    "find": "  const errorId = uid(\"btn-error\");",
+    "replace": "  const errorId = \"btn-error\";",
+    "suite": "test/browser/widgets.test.js",
+    "why": "A view has as many buttons as it has operations. Sharing the id makes every button's aria-describedby resolve to the first one's message, so a reader is told about a refusal that happened somewhere else entirely."
+  },
+  {
+    "name": "every screen is served the same screen",
+    "file": "examples/gallery/server.ts",
+    "find": "      `<script>window.__NGMCP_SCREEN=${JSON.stringify(screen)};`",
+    "replace": "      `<script>window.__NGMCP_SCREEN=\"charts\";`",
+    "suite": "test/browser/gallery.test.js",
+    "why": "One bundle serving seven uris only works because each one says which screen it is. Without that every tool draws the charts, and six of the seven screens are silently the wrong thing."
+  },
+  {
+    "name": "the checks are not sent with the screen",
+    "file": "examples/gallery/server.ts",
+    "find": "const screenOf = (name: string): Screen => ({ screen: name, checks: CHECKS[name] ?? [] });",
+    "replace": "const screenOf = (name: string): Screen => ({ screen: name, checks: [] });",
+    "suite": "test/browser/gallery.test.js",
+    "why": "The model cannot see the view, so the checks are the only way it can help a person decide whether a screen is right. Without them the gallery draws pictures and proves nothing."
+  },
+  {
+    "name": "the dashboard hides the server it could not reach",
+    "file": "examples/gallery/server.ts",
+    "find": "      unreachable: deployments.unreachable,",
+    "replace": "      unreachable: [],",
+    "suite": "test/browser/gallery.test.js",
+    "why": "A board that quietly drops a server reports `no billing incidents` when what happened is that billing is down, which is the opposite of what the reader needs to know."
   }
 ]

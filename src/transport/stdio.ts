@@ -17,6 +17,12 @@ export interface StdioOptions {
   exit?: (code: number) => void;
   /** Bytes the transport may hold before advisory traffic is thinned. */
   highWaterMark?: number;
+  /** Answer messages with this instead of the dispatcher's own `handle`.
+   *
+   * For a shim in front, such as the legacy handshake bridge. The dispatcher
+   * is still the one wired to the sink, the outbound channel and the in-flight
+   * table, because those belong to the server rather than to the shim. */
+  handle?: (message: Incoming) => Promise<Response | null>;
 }
 
 /** One JSON object per line, both ways.
@@ -112,7 +118,8 @@ export class StdioTransport {
     }
 
     // Dispatched, not awaited: this is where concurrency actually happens.
-    void this.dispatcher.handle(message).then(
+    const handle = this.options.handle ?? ((m: Incoming) => this.dispatcher.handle(m));
+    void handle(message).then(
       (response) => { if (response) this.#write(stdout, response as unknown as Notification); },
       (error) => {
         const id = (message as { id?: string | number }).id ?? null;

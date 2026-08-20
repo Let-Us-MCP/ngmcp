@@ -7,7 +7,7 @@
  * nothing. That is the case this component exists to make impossible.
  */
 import { computed, signal, type Signal } from "../reactive.js";
-import { h, read, type Reactive } from "../dom.js";
+import { h, read, uid, type Reactive } from "../dom.js";
 
 export type ButtonVariant = "primary" | "default" | "quiet" | "danger";
 
@@ -53,8 +53,14 @@ export function button(options: ButtonOptions): Button {
   const state = computed<"granted" | "absent" | "refused" | "busy">(() =>
     busy() ? "busy" : error() ? "refused" : available() ? "granted" : "absent");
 
+  // Per instance. A view has as many buttons as it has operations, and a fixed
+  // id makes every one of their `aria-describedby` resolve to the first
+  // button's message, so a reader is told about a refusal that happened
+  // somewhere else.
+  const errorId = uid("btn-error");
   const message = h("span", {
     class: "button-error",
+    id: errorId,
     role: "status",
     text: error,
     hidden: computed(() => error() === ""),
@@ -83,7 +89,7 @@ export function button(options: ButtonOptions): Button {
     disabled: computed(() =>
       busy() || (options.disabled ? read(options.disabled) : false)),
     "aria-busy": computed(() => (busy() ? "true" : "false")),
-    "aria-describedby": computed(() => (error() ? "btn-error" : null)),
+    "aria-describedby": computed(() => (error() ? errorId : null)),
     text: computed(() =>
       available()
         ? read(options.label)
@@ -92,8 +98,6 @@ export function button(options: ButtonOptions): Button {
           : read(options.label)),
     onclick: activate,
   });
-
-  message.id = "btn-error";
 
   const children: Node[] = [main];
   // When the capability was never offered, a fallback is a better answer than

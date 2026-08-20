@@ -48,6 +48,7 @@ const PAGE = (viewUri: string, capabilities: string) => `<!doctype html>
   <label><input type="checkbox" id="deny"> refuse the next call</label>
   <label><input type="checkbox" id="slow"> make calls slow</label>
   <button id="reload">Reload view</button>
+  <button id="teardown">Ask to tear down</button>
   <span class="warn">grants everything; a real host will not</span>
 </header>
 <iframe id="view" sandbox="allow-scripts allow-same-origin"></iframe>
@@ -79,8 +80,52 @@ const PAGE = (viewUri: string, capabilities: string) => `<!doctype html>
     return response.json();
   }
 
+  /* Host methods, as opposed to tool calls. A dev host that ignores these
+     leaves the view waiting out its timeout, which reads as the app being
+     slow rather than as the host not having the method. Everything not
+     implemented here is refused by name. */
+  const hostMethods = {
+    sendSizeChanged: (params) => ({ ok: true, height: params && params.height }),
+    requestDisplayMode: (params) => {
+      const mode = (params && params.mode) || "inline";
+      const frame = document.getElementById("view").contentWindow;
+      frame.postMessage({ __event: "displayMode", data: mode }, "*");
+      return { mode };
+    },
+    openLink: (params) => ({ opened: params && params.url }),
+    sendMessage: (params) => ({ sent: params && params.text }),
+    updateModelContext: () => ({ updated: true }),
+    sendLog: () => ({ logged: true }),
+    requestTeardown: () => ({ ok: true }),
+  };
+
   addEventListener("message", async (event) => {
     const data = event.data;
+    const frame0 = document.getElementById("view").contentWindow;
+
+    if (data && data.__host) {
+      line("in", "host." + data.__host + " " + JSON.stringify(data.params ?? {}));
+      if (document.getElementById("deny").checked) {
+        document.getElementById("deny").checked = false;
+        line("out", "refused by the dev host");
+        frame0.postMessage({ __id: data.__id, error: "The host refused that." }, "*");
+        return;
+      }
+      const method = hostMethods[data.__host];
+      if (!method) {
+        line("out", "no such host method: " + data.__host);
+        frame0.postMessage({
+          __id: data.__id,
+          error: "This host does not implement " + data.__host + ".",
+        }, "*");
+        return;
+      }
+      const result = method(data.params);
+      line("out", JSON.stringify(result));
+      frame0.postMessage({ __id: data.__id, result }, "*");
+      return;
+    }
+
     if (!data || !data.__call) return;
     line("in", data.__call + " " + JSON.stringify(data.args ?? {}));
     const frame = document.getElementById("view").contentWindow;
@@ -99,6 +144,25 @@ const PAGE = (viewUri: string, capabilities: string) => `<!doctype html>
       ? { __id: data.__id, error: answer.error.message }
       : { __id: data.__id, result: answer.result }, "*");
   });
+
+  function tellTheView() {
+    const frame = document.getElementById("view").contentWindow;
+    if (!frame) return;
+    frame.postMessage({ __event: "hostCapabilities", data: caps }, "*");
+    frame.postMessage({ __event: "hostContext", data: {
+      locale: navigator.language,
+      theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+      displayMode: "inline",
+      safeArea: { top: 0, right: 0, bottom: 0, left: 0 },
+    } }, "*");
+  }
+  document.getElementById("view").addEventListener("load", () => setTimeout(tellTheView, 0));
+
+  document.getElementById("teardown").onclick = () => {
+    const frame = document.getElementById("view").contentWindow;
+    frame.postMessage({ __event: "teardown", __id: "teardown-1" }, "*");
+    line("in", "asked the view to tear down");
+  };
 
   document.getElementById("reload").onclick = () => mount();
   new EventSource("/changes").onmessage = () => location.reload();

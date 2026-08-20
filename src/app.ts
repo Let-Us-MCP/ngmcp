@@ -1,5 +1,6 @@
 import { Dispatcher, type DispatcherOptions } from "./runtime/dispatch.js";
 import { StdioTransport } from "./transport/stdio.js";
+import { legacyBridge, type LegacyOptions } from "./transport/legacy.js";
 import { httpHandler, serveHttp, type HttpHandlerOptions } from "./transport/http.js";
 import type {
   Context, PromptDefinition, PromptMessage, RegisteredPrompt, RegisteredTool,
@@ -180,8 +181,25 @@ export class App {
   }
 
   /** Serve over stdio. */
-  serve(): StdioTransport {
-    const transport = new StdioTransport(this.dispatcher);
+  serve(options?: { legacy?: LegacyOptions | boolean }): StdioTransport {
+    const legacy = options?.legacy;
+    if (!legacy) {
+      const transport = new StdioTransport(this.dispatcher);
+      transport.start();
+      return transport;
+    }
+    // A shim in front, for a host that still opens with `initialize`. It
+    // holds nothing: see `transport/legacy.ts` for why that matters and what
+    // it costs.
+    const bridge = legacyBridge(this.dispatcher, {
+      name: this.options.name,
+      version: this.options.version ?? "0.0.0",
+      ...(this.options.instructions ? { instructions: this.options.instructions } : {}),
+      ...(typeof legacy === "object" ? legacy : {}),
+    });
+    const transport = new StdioTransport(this.dispatcher, {
+      handle: (message: Incoming) => bridge.handle(message),
+    });
     transport.start();
     return transport;
   }

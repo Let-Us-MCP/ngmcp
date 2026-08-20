@@ -17,11 +17,24 @@ const HOST_PAGE = `<!doctype html><meta charset="utf-8"><body style="margin:0">
 <iframe id="view" sandbox="allow-scripts" style="width:100%;height:600px;border:0"></iframe>
 <script>
   window.__calls = [];
+  window.__hostCalls = [];
   addEventListener("message", async (event) => {
     const data = event.data;
+    const frame = document.getElementById("view").contentWindow;
+    // A host method rather than a tool call. This host implements none of
+    // them, and says so: a host that stays silent on a method it does not have
+    // leaves the view waiting out its timeout, which is not a refusal, it is a
+    // hang that looks like the app being slow.
+    if (data && data.__host) {
+      window.__hostCalls.push({ method: data.__host, params: data.params });
+      frame.postMessage({
+        __id: data.__id,
+        error: "This host does not implement " + data.__host + ".",
+      }, "*");
+      return;
+    }
     if (!data || !data.__call) return;
     window.__calls.push({ name: data.__call, args: data.args });
-    const frame = document.getElementById("view").contentWindow;
     try {
       const result = await window.__callServer(data.__call, data.args ?? {});
       frame.postMessage({ __id: data.__id, result }, "*");
@@ -109,6 +122,7 @@ export async function openApp(engineName, serverPath, { viewUri } = {}) {
   return {
     page, frame, mcp, browser, engine: engineName,
     calls: () => page.evaluate(() => window.__calls),
+    hostCalls: () => page.evaluate(() => window.__hostCalls),
     async close() { await browser.close(); await mcp.close(); },
   };
 }
