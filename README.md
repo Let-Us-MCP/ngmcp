@@ -7,8 +7,12 @@ No sessions. No `initialize`. Zero runtime dependencies.
 Early: `0.0.1`, stdio only, and the API will change. What is here is tested,
 and what is not here is listed at the bottom rather than implied.
 
+```
+npm install @li69nux_org/ngmcp
+```
+
 ```ts
-import { App } from "ngmcp";
+import { App } from "@li69nux_org/ngmcp";
 
 const app = new App({ name: "explorer", version: "1.0.0" });
 
