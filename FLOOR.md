@@ -20,8 +20,28 @@ building a data application assumes already exists. A developer who has used
 it will look for a chart, a form, tabs and a file uploader on day one, and
 notice their absence immediately.
 
+**HoloViz Panel** supplies the ambition, and the architecture. It is what a
+serious dashboard framework contains: roughly 35 panes, 60 widgets, 18
+layouts, 9 indicators, 9 templates and a chat stack. More importantly it is
+built the right way round for this problem.
+
+## Why Panel is the model and Streamlit is only the checklist
+
+Streamlit reruns the whole script on every interaction. A view cannot work
+that way. It lives in a frame for the length of a conversation, its state is
+local by design, and rerunning means re-calling tools, which is precisely the
+boundary crossing that makes an app feel slow and cost money.
+
+Panel is object based and reactive. Components hold their own state,
+parameters change, and only what depends on them updates. That is what a
+long-lived view in a sandboxed frame actually does, so Panel's model maps onto
+an MCP app with nothing lost in translation. Its `.servable()` is already the
+shape of `_meta.ui.resourceUri`: an object a server serves.
+
+Take the widget list from Streamlit and the architecture from Panel.
+
 The floor is the union. Nothing below is speculative: each line is demanded by
-at least one of the three, and the provenance column says which.
+at least one of the four, and the provenance says which.
 
 ---
 
@@ -138,7 +158,31 @@ proposes, the human decides, and a rewrite is shown rather than applied.
 `ApprovalCard` carries who asked, on whose behalf, which tool, which
 arguments, and what happened before.
 
-## 10. State and flow
+## 10. Indicators
+
+Dashboard vocabulary. Streamlit has almost none of this and Panel has nine,
+which is the difference between a page of numbers and a dashboard.
+
+`Number` · `Trend` · `Dial` · `Gauge` · `LinearGauge` · `Progress` ·
+`BooleanStatus` · `LoadingSpinner` · `TooltipIcon`
+
+## 11. Dashboard shells
+
+The part that turns components into a dashboard, and the reason this library
+exists rather than a widget set. Panel ships nine templates; the equivalent
+here is fewer and stricter, because a view has to survive being resized by a
+host and switched between inline and fullscreen.
+
+`ListTemplate` (header, sidebar, main) · `GridTemplate` · `TabbedTemplate` ·
+`SlidesTemplate` · `GridStack` (draggable, resizable panels) · `GridSpec` ·
+`Feed` (an appending stream, virtualised) · `FloatPanel` · `Modal`
+
+A dashboard shell carries obligations a single component does not: panel
+layout persisted through a server-minted handle, per-panel refresh that does
+not re-fetch the whole board, and a layout that degrades to one column when
+the host gives it 320 pixels.
+
+## 12. State and flow
 
 `SessionState` (local to the view, which is where MCP state now lives) ·
 `QueryParams` · `Fragment` · `Form` · `CacheData` · `Rerun`
@@ -172,9 +216,27 @@ none of the three sources provides them:
 Two more from the framework: the **typed contract** from a tool's output to
 its view's props, so the shape is written once; and **local-first by default**.
 
+## What a dashboard needs that a single app does not
+
+Moving from "an app" to "a dashboard" changes the server, not only the view.
+Four things become obligations:
+
+1. **Many tools feeding many panels.** One view, several tools, each panel
+   refreshing on its own schedule without re-fetching the board.
+2. **Refresh without a conversation turn.** Progress notifications already
+   flow against a running request; a dashboard needs a panel to update without
+   the model being involved at all.
+3. **Layout as state.** Which panels, where, at what size. The protocol has no
+   sessions, so this is a server-minted handle passed as a tool argument.
+4. **Composition across servers.** The interesting dashboard shows deployments
+   from one server next to incidents from another. Nothing in the extension
+   describes that today, and it is the largest thing missing.
+
+That fourth one is the real ceiling. Everything above it is buildable now.
+
 ## Order
 
-The floor is roughly 90 components, which is a year, not a sprint. The order
+The floor is roughly 110 components, which is a year, not a sprint. The order
 that gets something usable soonest:
 
 1. `DataTable`, `Metric`, `Toast`, `Banner`, `Button`, `Form` — covers the
@@ -182,7 +244,9 @@ that gets something usable soonest:
 2. Layout: `Stack`, `Columns`, `Tabs`, `Card`, `Dialog`.
 3. Agent: `Proposal`, `ApprovalCard`, `TaskList`, `Stream`.
 4. Charts, starting with `LineChart` and `Sparkline`.
-5. Everything else, by demand.
+5. `ListTemplate` and `GridStack`, at which point it is a dashboard rather
+   than a page.
+6. Everything else, by demand.
 
 Each one lands with its three host states, its keyboard route, its axe
 assertion and its mutant, or it does not land.
