@@ -406,5 +406,85 @@
     "replace": "",
     "suite": "test/browser/a11y.test.js",
     "why": "The field where a person types the title back to approve a high-risk action is the last thing that should be unlabelled."
+  },
+  {
+    "name": "a chart is a picture with no numbers behind it",
+    "file": "src/view/charts/index.ts",
+    "find": "    h(\"table\", { class: \"sr-only chart-data\" },",
+    "replace": "    h(\"table\", { class: \"sr-only chart-data\", hidden: true },",
+    "suite": "test/browser/charts.test.js",
+    "why": "The summary survives and the values do not, so a reader who cannot see the marks is told the shape of the answer instead of being given the answer."
+  },
+  {
+    "name": "arrow keys do not move through a chart",
+    "file": "src/view/charts/index.ts",
+    "find": "        if (key === \"ArrowRight\") { event.preventDefault(); move(1); }\n        else if (key === \"ArrowLeft\") { event.preventDefault(); move(-1); }\n",
+    "replace": "",
+    "suite": "test/browser/charts.test.js",
+    "why": "The plot keeps its tab stop and stops being a route through the data, which is the difference between a result and a picture of one."
+  },
+  {
+    "name": "a chart speaks before anybody has moved",
+    "file": "src/view/charts/index.ts",
+    "find": "    const row = current[index];\n    if (!row) return \"\";",
+    "replace": "    const row = current[index] ?? current[0];\n    if (!row) return \"\";",
+    "suite": "test/browser/charts.test.js",
+    "why": "The readout announces a point nobody is on the moment the chart mounts, and the cursor is drawn on it."
+  },
+  {
+    "name": "a chart is drawn once and never again",
+    "file": "src/view/charts/index.ts",
+    "find": "  effect(() => {\n  const rows = f.rows();\n  const values = valuesOf(rows);",
+    "replace": "  {\n  const rows = f.rows();\n  const values = valuesOf(rows);",
+    "suite": "test/browser/charts.test.js",
+    "why": "A panel whose tool answered again keeps drawing the previous answer. A dashboard refreshes one panel at a time, so this is the normal case rather than the edge one."
+  },
+  {
+    "name": "bars hang from the top of the frame",
+    "file": "src/view/charts/index.ts",
+    "find": "        y: Math.min(y, base),\n        width: Math.max(1, each - 2),\n        height: Math.max(1, Math.abs(base - y)),",
+    "replace": "        y: top,\n        width: Math.max(1, each - 2),\n        height: Math.max(1, base - y),",
+    "suite": "test/browser/charts.test.js",
+    "why": "Every bar starts at the top rather than on the axis, so a fall points the same way as a rise and the picture says the opposite of the number."
+  },
+  {
+    "name": "an area is never closed",
+    "file": "src/view/charts/index.ts",
+    "find": "        d: `${path(points)} L${last.toFixed(2)} ${base} L${first.toFixed(2)} ${base} Z`,",
+    "replace": "        d: path(points),",
+    "suite": "test/browser/charts.test.js",
+    "why": "The fill then runs to wherever the renderer decides to close the shape, which is not the axis."
+  },
+  {
+    "name": "a scatter chart plots by row order",
+    "file": "src/view/charts/index.ts",
+    "find": "      cx: xScale(numberAt(row, options.xValue)),",
+    "replace": "      cx: xScale(rows.indexOf(row)),",
+    "suite": "test/browser/charts.test.js",
+    "why": "The relationship the chart exists to show is replaced by the order the rows happened to arrive in."
+  },
+  {
+    "name": "a sparkline says nothing about its range",
+    "file": "src/view/charts/index.ts",
+    "find": "  const description = computed(() =>\n    summaryOf(options.label, values(), format()));",
+    "replace": "  const description = computed(() => options.label);",
+    "suite": "test/browser/charts.test.js",
+    "why": "A sparkline is too small to read a value off, so its name is the only place the numbers exist. Naming it after the field alone leaves nothing behind the picture."
+  },
+  {
+    "name": "a heatmap encodes value only as colour",
+    "file": "src/view/charts/index.ts",
+    "find": "          text: format()(value),\n        });",
+    "replace": "        });",
+    "suite": "test/browser/charts.test.js",
+    "why": "Colour is not a channel every reader has, and lightness is not one anybody reads precisely. The cell keeps its shade and loses its number."
+  },
+  {
+    "name": "a chart takes the engine's locale",
+    "file": "src/view/charts/index.ts",
+    "find": "  const format = computed(() => options.format\n    ?? ((value: number) => new Intl.NumberFormat(locale()).format(value)));\n  const cursor = signal(-1);",
+    "replace": "  const format = computed(() => options.format\n    ?? ((value: number) => new Intl.NumberFormat().format(value)));\n  const cursor = signal(-1);",
+    "suite": "test/browser/charts.test.js",
+    "why": "1234567 renders as 1,234,567 in Chromium and 12,34,567 in WebKit on the same machine, so half the readers get a number they have to stop and parse."
   }
 ]

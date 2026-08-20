@@ -149,6 +149,48 @@ const COMPONENTS = {
     document.getElementById("root").appendChild(
       taskList({ tasks, onCancel: () => {}, onRetry: () => {} }).el);`,
 
+  "a line chart, with its cursor on a point": `
+    import { lineChart } from "${VIEW}";
+    const c = lineChart({
+      rows: [
+        { day: "Mon", errors: 143 }, { day: "Tue", errors: 92 },
+        { day: "Wed", errors: 12 }, { day: "Thu", errors: 61 },
+      ],
+      x: "day", xLabel: "Day", title: "Errors this week",
+      description: "Down since Monday.",
+      series: [{ key: "errors", label: "Errors" }], locale: "en-US",
+    });
+    document.getElementById("root").appendChild(c.el);
+    c.cursor.set(1);`,
+
+  "a bar chart, an area chart and a scatter chart": `
+    import { barChart, areaChart, scatterChart } from "${VIEW}";
+    const root = document.getElementById("root");
+    const rows = [
+      { region: "North", change: 40, latency: 120, errors: 3 },
+      { region: "South", change: -25, latency: 240, errors: 9 },
+    ];
+    root.appendChild(barChart({ rows, x: "region", title: "Change by region",
+      series: [{ key: "change", label: "Change" }], locale: "en-US" }).el);
+    root.appendChild(areaChart({ rows, x: "region", title: "Latency by region",
+      series: [{ key: "latency", label: "Latency" }], locale: "en-US" }).el);
+    root.appendChild(scatterChart({ rows, x: "latency", xValue: "latency",
+      title: "Errors against latency",
+      series: [{ key: "errors", label: "Errors" }], locale: "en-US" }).el);`,
+
+  "a sparkline and a heatmap": `
+    import { sparkline, heatmap, h } from "${VIEW}";
+    const root = document.getElementById("root");
+    const rows = [{ day: "Mon", errors: 143 }, { day: "Tue", errors: 7 }];
+    root.appendChild(h("p", {}, "Errors ", sparkline({
+      rows, key: "errors", label: "Errors this week", x: "day", locale: "en-US" }).el));
+    root.appendChild(heatmap({
+      rows: [{ service: "checkout", mon: 143, tue: 92 },
+             { service: "billing", mon: 12, tue: 61 }],
+      row: "service", title: "Errors by service",
+      columns: [{ key: "mon", label: "Mon" }, { key: "tue", label: "Tue" }],
+      locale: "en-US" }).el);`,
+
   "a stream with lines in it": `
     import { stream } from "${VIEW}";
     const s = stream({ announceEveryMs: 150, max: 20 });

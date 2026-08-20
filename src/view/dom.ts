@@ -25,7 +25,6 @@ export interface Props {
 
 export type Child = Node | string | number | null | undefined | false | Child[];
 
-/** Create an element. Attributes starting with `on` are listeners. */
 /** An id no other instance of the same component will mint.
  *
  * A component that hard-codes the id it points `aria-labelledby` at works
@@ -36,9 +35,25 @@ export type Child = Node | string | number | null | undefined | false | Child[];
 let sequence = 0;
 export const uid = (prefix: string): string => `${prefix}-${++sequence}`;
 
+/** Create an element. Attributes starting with `on` are listeners. */
 export function h(tag: string, props: Props = {}, ...children: Child[]): HTMLElement {
-  const el = document.createElement(tag);
+  return build(document.createElement(tag), props, children);
+}
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** The same, in the SVG namespace.
+ *
+ * `document.createElement("rect")` returns an `HTMLUnknownElement`: it goes
+ * into the document, carries the attributes it was given, and draws nothing at
+ * all. Charts are inline SVG rather than a charting dependency, because a view
+ * that names an external origin defeats the CSP it ships with, so this is the
+ * only way marks get made. */
+export function svg(tag: string, props: Props = {}, ...children: Child[]): SVGElement {
+  return build(document.createElementNS(SVG_NS, tag) as SVGElement, props, children);
+}
+
+function build<E extends Element>(el: E, props: Props, children: Child[]): E {
   for (const [key, value] of Object.entries(props)) {
     if (value === undefined || value === null || value === false) continue;
 
@@ -55,7 +70,7 @@ export function h(tag: string, props: Props = {}, ...children: Child[]): HTMLEle
       continue;
     }
     if (key === "style" && typeof value === "object") {
-      Object.assign(el.style, value as Partial<CSSStyleDeclaration>);
+      Object.assign((el as unknown as HTMLElement).style, value as Partial<CSSStyleDeclaration>);
       continue;
     }
     if (typeof value === "function") {
@@ -69,7 +84,7 @@ export function h(tag: string, props: Props = {}, ...children: Child[]): HTMLEle
   return el;
 }
 
-function setAttribute(el: HTMLElement, key: string, value: unknown): void {
+function setAttribute(el: Element, key: string, value: unknown): void {
   const name = key === "className" ? "class" : key;
   if (value === false || value === null || value === undefined) {
     el.removeAttribute(name);

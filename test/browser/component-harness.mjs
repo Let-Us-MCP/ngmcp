@@ -92,6 +92,22 @@ export const BASE_CSS = `
   .tasks { padding: 0; margin: 0 }
   .stream-lines { max-height: 160px; overflow-y: auto; font: 11.5px/1.5 ui-monospace, monospace }
   .stream-line { padding: 1px 4px } .stream-error { color: #c00 }
+  .chart { margin: 0 0 16px }
+  .chart-title { font-weight: 600; margin-bottom: 4px }
+  .chart-description { color: #888; margin: 0 0 6px }
+  .chart-canvas { display: block }
+  .chart-canvas:focus-visible { outline: 2px solid currentColor }
+  .chart-plot { width: 100%; height: auto }
+  .chart-grid { stroke: #8883; stroke-width: 1 }
+  .chart-axis { stroke: #8888; stroke-width: 1 }
+  .chart-frame { stroke: #8884 }
+  .chart-tick { font-size: 11px; fill: #888 }
+  .chart-cursor { stroke: currentColor; stroke-width: 1; stroke-dasharray: 3 3 }
+  .chart-readout { margin: 6px 0 0; font-size: 12px }
+  .sparkline-plot { width: 120px; height: 28px; vertical-align: middle }
+  .heatmap { border-collapse: collapse }
+  .heatmap th, .heatmap td { padding: 6px 10px; text-align: right }
+  .heatmap-cell { color: #000 }
 `;
 
 /* Accessibility asserted rather than claimed. The component is checked where

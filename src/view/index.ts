@@ -12,8 +12,14 @@ export type {
 } from "../contract/define.js";
 export { signal, computed, effect, batch, untracked } from "./reactive.js";
 export type { Signal } from "./reactive.js";
-export { h, list, read, append } from "./dom.js";
+export { h, svg, list, read, append, uid } from "./dom.js";
 export type { Reactive, Props, Child } from "./dom.js";
+export {
+  lineChart, areaChart, barChart, scatterChart, sparkline, heatmap,
+} from "./charts/index.js";
+export type {
+  Chart, ChartOptions, ChartRow, Series, SparklineOptions, HeatmapOptions,
+} from "./charts/index.js";
 export { dataTable } from "./panes/data-table.js";
 export { metric } from "./panes/metric.js";
 export type { Metric, MetricOptions, MetricState } from "./panes/metric.js";
