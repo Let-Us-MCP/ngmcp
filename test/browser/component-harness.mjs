@@ -108,6 +108,21 @@ export const BASE_CSS = `
   .heatmap { border-collapse: collapse }
   .heatmap th, .heatmap td { padding: 6px 10px; text-align: right }
   .heatmap-cell { color: #000 }
+  .shell { display: block }
+  .shell-header { display: flex; align-items: baseline; gap: 12px;
+    border-bottom: 1px solid #8884; padding-bottom: 8px }
+  .shell-title { font-size: 18px; margin: 0 }
+  .shell-body { display: grid; grid-template-columns: 200px 1fr; gap: 16px }
+  .shell-narrow .shell-body { grid-template-columns: 1fr }
+  .shell-sidebar { border-right: 1px solid #8884 }
+  .shell-narrow .shell-sidebar { border: 0; border-bottom: 1px solid #8884 }
+  .board { gap: 12px; align-items: start }
+  .panel { border: 1px solid #8884; border-radius: 8px; padding: 10px; background: #8881 }
+  .panel:focus-visible { outline: 2px solid currentColor }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px }
+  .panel-title { font-size: 14px; margin: 0 }
+  .panel-error { color: #c00; margin: 4px 0 }
+  .panel-loading { opacity: 0.6 }
 `;
 
 /* Accessibility asserted rather than claimed. The component is checked where

@@ -31,6 +31,11 @@ export { form } from "./widgets/form.js";
 export {
   stack, row, spacer, divider, columns, card, tabs, dialog,
 } from "./layout/index.js";
+export { listTemplate, gridStack } from "./templates/index.js";
+export type {
+  ListTemplate, ListTemplateOptions, GridStack, GridStackOptions,
+  Panel, PanelDefinition, PanelPlacement, PanelState, Layout,
+} from "./templates/index.js";
 export { proposal } from "./agent/proposal.js";
 export type { Proposal, ProposalOptions } from "./agent/proposal.js";
 export { approvalCard } from "./agent/approval.js";

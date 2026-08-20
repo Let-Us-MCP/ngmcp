@@ -486,5 +486,61 @@
     "replace": "  const format = computed(() => options.format\n    ?? ((value: number) => new Intl.NumberFormat().format(value)));\n  const cursor = signal(-1);",
     "suite": "test/browser/charts.test.js",
     "why": "1234567 renders as 1,234,567 in Chromium and 12,34,567 in WebKit on the same machine, so half the readers get a number they have to stop and parse."
+  },
+  {
+    "name": "refreshing a panel refreshes the board",
+    "file": "src/view/templates/index.ts",
+    "find": "    async refresh(id: string) { await byId.get(id)?.refresh(); },",
+    "replace": "    async refresh(_id: string) { await Promise.all(panels.map((p) => p.refresh())); },",
+    "suite": "test/browser/templates.test.js",
+    "why": "Every panel re-runs its tool because one number went stale. Six panels is then six tool calls for one refresh, which is the reload a dashboard exists to avoid."
+  },
+  {
+    "name": "one panel failing takes the board with it",
+    "file": "src/view/templates/index.ts",
+    "find": "      } catch (cause) {\n        // The panel says so and the board carries on. One tool that failed is\n        // one panel that failed, which is the point of loading them apart.\n        error.set(cause instanceof Error ? cause.message : String(cause));\n        state.set(\"failed\");\n      }",
+    "replace": "      } finally {\n        state.set(\"ready\");\n      }",
+    "suite": "test/browser/templates.test.js",
+    "why": "A tool that failed leaves a panel claiming to be ready with nothing in it, and saying nothing about why. Silence on failure is the failure this is for."
+  },
+  {
+    "name": "a panel can be pushed off the board",
+    "file": "src/view/templates/index.ts",
+    "find": "        x: clamp(p.x + dx, 0, columnCount - p.w),\n        y: Math.max(0, p.y + dy),",
+    "replace": "        x: p.x + dx,\n        y: p.y + dy,",
+    "suite": "test/browser/templates.test.js",
+    "why": "Arrow keys walk a panel past the first column into a negative grid line, where it is drawn somewhere the reader cannot reach it."
+  },
+  {
+    "name": "moving a panel is not reported",
+    "file": "src/view/templates/index.ts",
+    "find": "        `${name}, column ${p.x + 1}, row ${p.y + 1}, ${p.w} wide, ${p.h} tall`);\n      options.onLayoutChange?.(layout());",
+    "replace": "        `${name}, column ${p.x + 1}, row ${p.y + 1}, ${p.w} wide, ${p.h} tall`);",
+    "suite": "test/browser/templates.test.js",
+    "why": "The layout still reads correctly from inside the view and nothing outside is ever told it changed, so what gets persisted is whatever the board looked like when it was built."
+  },
+  {
+    "name": "the layout is not a value anything can carry",
+    "file": "src/view/templates/index.ts",
+    "find": "  const layout = (): Layout => ({\n    columns: columnCount,\n    panels: panels.map((p) => ({ id: p.id, ...p.place() })),\n  });",
+    "replace": "  const layout = (): Layout => ({\n    columns: columnCount,\n    panels: panels as unknown as Layout[\"panels\"],\n  });",
+    "suite": "test/browser/templates.test.js",
+    "why": "The layout comes out carrying live panels rather than their placements, so it cannot be serialised and cannot be a tool argument, which is the only route to persistence this protocol has."
+  },
+  {
+    "name": "a narrow board forgets where its panels were",
+    "file": "src/view/templates/index.ts",
+    "find": "      if (narrow()) {\n        el.style.gridColumn = \"1 / -1\";\n        el.style.gridRow = \"auto\";\n      } else {",
+    "replace": "      if (narrow()) {\n        place.set({ x: 0, y: 0, w: 1, h: 1 });\n        el.style.gridColumn = \"1 / -1\";\n        el.style.gridRow = \"auto\";\n      } else {",
+    "suite": "test/browser/templates.test.js",
+    "why": "A host that narrows the frame flattens the board permanently: widening it again gives back a column of one-wide panels rather than the arrangement somebody made."
+  },
+  {
+    "name": "a shell has no landmarks",
+    "file": "src/view/templates/index.ts",
+    "find": "      sidebar\n        ? h(\"nav\", { class: \"shell-sidebar\", \"aria-label\": sidebarLabel }, sidebar)\n        : null,\n      h(\"main\", { class: \"shell-main\", \"aria-labelledby\": titleId }, ...children)),",
+    "replace": "      sidebar ? h(\"div\", { class: \"shell-sidebar\" }, sidebar) : null,\n      h(\"div\", { class: \"shell-main\" }, ...children)),",
+    "suite": "test/browser/templates.test.js",
+    "why": "A view is a document even at 320 pixels inside somebody else's product. Without landmarks a reader has no way to skip the navigation or find the board."
   }
 ]

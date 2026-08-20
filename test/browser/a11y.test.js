@@ -191,6 +191,27 @@ const COMPONENTS = {
       columns: [{ key: "mon", label: "Mon" }, { key: "tue", label: "Tue" }],
       locale: "en-US" }).el);`,
 
+  "a dashboard shell with a board in it": `
+    import { listTemplate, gridStack, h } from "${VIEW}";
+    const root = document.getElementById("root");
+    root.style.width = "900px";
+    const board = gridStack({
+      columns: 12, label: "Operations",
+      panels: [
+        { id: "deployments", title: "Deployments", x: 0, y: 0, w: 6, h: 1,
+          load: () => h("p", { text: "Four services." }) },
+        { id: "incidents", title: "Incidents", x: 6, y: 0, w: 6, h: 1,
+          load: () => { throw new Error("Upstream 503."); } },
+      ],
+    });
+    const shell = listTemplate({
+      title: "Operations",
+      sidebar: h("a", { href: "#deployments", text: "Deployments" }),
+      sidebarLabel: "Boards",
+      actions: [h("button", { type: "button", text: "Refresh all" })],
+    }, board.el);
+    root.appendChild(shell.el);`,
+
   "a stream with lines in it": `
     import { stream } from "${VIEW}";
     const s = stream({ announceEveryMs: 150, max: 20 });
