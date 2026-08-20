@@ -6,13 +6,18 @@
  */
 import { effect, type Signal } from "./reactive.js";
 
-export type Reactive<T> = T | Signal<T>;
+/** A value, a signal holding one, or a function returning one.
+ *
+ * The third form is what makes `disabled: () => selected().length === 0` work
+ * without wrapping it in `computed`. It is unambiguous for the value types
+ * components accept, none of which are themselves functions. */
+export type Reactive<T> = T | Signal<T> | (() => T);
 
-const isSignal = <T>(v: Reactive<T>): v is Signal<T> =>
+export const isSignal = <T>(v: Reactive<T>): v is Signal<T> =>
   typeof v === "function" && "peek" in (v as object);
 
 export const read = <T>(v: Reactive<T>): T =>
-  isSignal(v) ? v() : v;
+  typeof v === "function" ? (v as () => T)() : v;
 
 export interface Props {
   [key: string]: unknown;
@@ -32,7 +37,7 @@ export function h(tag: string, props: Props = {}, ...children: Child[]): HTMLEle
       continue;
     }
     if (key === "text") {
-      if (isSignal(value as Reactive<unknown>)) {
+      if (typeof value === "function") {
         effect(() => { el.textContent = String(read(value as Reactive<unknown>)); });
       } else {
         el.textContent = String(value);
@@ -43,7 +48,7 @@ export function h(tag: string, props: Props = {}, ...children: Child[]): HTMLEle
       Object.assign(el.style, value as Partial<CSSStyleDeclaration>);
       continue;
     }
-    if (isSignal(value as Reactive<unknown>)) {
+    if (typeof value === "function") {
       effect(() => setAttribute(el, key, read(value as Reactive<unknown>)));
       continue;
     }

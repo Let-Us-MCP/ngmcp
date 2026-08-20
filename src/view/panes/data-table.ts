@@ -13,7 +13,10 @@
 import { computed, signal, type Signal } from "../reactive.js";
 import { h, list, read, type Reactive } from "../dom.js";
 
-export type Row = Record<string, unknown>;
+/** Any object. Not `Record<string, unknown>`: a declared interface is not
+ *  assignable to that, so requiring it would reject exactly the typed shapes a
+ *  contract produces. */
+export type Row = object;
 export type SortDirection = "ascending" | "descending";
 
 export interface Column<R extends Row = Row> {
@@ -50,8 +53,11 @@ export interface DataTable<R extends Row = Row> {
   clearSelection(): void;
 }
 
+const cell = (row: Row, key: string): unknown =>
+  (row as Record<string, unknown>)[key];
+
 const defaultId = (row: Row): string =>
-  String(row["id"] ?? JSON.stringify(row));
+  String(cell(row, "id") ?? JSON.stringify(row));
 
 const compare = (a: unknown, b: unknown): number => {
   if (a === b) return 0;
@@ -85,7 +91,7 @@ export function dataTable<R extends Row = Row>(
     const rows = all();
     if (!term) return rows;
     return rows.filter((row) => columns.some((column) => {
-      const value = row[column.key];
+      const value = cell(row, column.key);
       return value !== null && value !== undefined
         && String(value).toLowerCase().includes(term);
     }));
@@ -96,7 +102,7 @@ export function dataTable<R extends Row = Row>(
     const rows = filtered();
     if (!key) return rows;
     const direction = sortDirection() === "ascending" ? 1 : -1;
-    return [...rows].sort((a, b) => compare(a[key], b[key]) * direction);
+    return [...rows].sort((a, b) => compare(cell(a, key), cell(b, key)) * direction);
   });
 
   const pageCount = computed(() =>
@@ -174,7 +180,7 @@ export function dataTable<R extends Row = Row>(
       },
     });
     for (const column of columns) {
-      const value = row[column.key];
+      const value = cell(row, column.key);
       tr.appendChild(h("td", { class: column.align === "end" ? "num" : null },
         column.format ? column.format(value, row)
           : value === null || value === undefined ? "" : String(value)));
