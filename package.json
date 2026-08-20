@@ -1,7 +1,7 @@
 {
   "name": "ngmcp",
   "version": "0.0.1",
-  "description": "A stateless MCP Apps server framework for the 2026-07-28 protocol. No sessions, one typed contract from tool to view.",
+  "description": "A stateless MCP server for core protocol 2026-07-28. No sessions, no initialize handshake, no runtime dependencies.",
   "license": "MIT",
   "author": "krimler <yavan@outlook.com>",
   "repository": {
