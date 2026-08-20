@@ -64,6 +64,20 @@ export const BASE_CSS = `
   .field-error { color: #c00 } .field-help { color: #888 }
   [data-prefilled="true"] { outline: 2px dashed #fa0 }
   .button-error { color: #c00; margin-left: 8px }
+  .stack { display: flex; flex-direction: column }
+  .row { display: flex; flex-direction: row; flex-wrap: wrap }
+  .gap-tight { gap: 4px } .gap-normal { gap: 10px } .gap-loose { gap: 20px }
+  .spacer { flex: 1 }
+  .columns { display: grid }
+  .columns.collapsed { grid-template-columns: 1fr !important }
+  .card { border: 1px solid #8884; border-radius: 8px; padding: 12px }
+  .card-head { display: flex; align-items: center; justify-content: space-between }
+  .tablist { display: flex; gap: 4px; border-bottom: 1px solid #8884 }
+  .tab { padding: 6px 10px; border: 0; background: none; cursor: pointer; font: inherit }
+  .tab.selected { font-weight: 700; box-shadow: inset 0 -2px currentColor }
+  .tabpanel { padding: 10px 0 }
+  .dialog { border: 1px solid #8884; border-radius: 10px; padding: 16px; min-width: 260px }
+  .dialog::backdrop { background: #0006 }
 `;
 
 /** Mount one component in a sandboxed frame with an opaque origin, the way a

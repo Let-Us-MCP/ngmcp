@@ -254,6 +254,29 @@ Four things become obligations:
 
 That fourth one is the real ceiling. Everything above it is buildable now.
 
+## Built so far
+
+| Kind | Component | Notes |
+|---|---|---|
+| Pane | `dataTable` | local sort, filter, page, select |
+| Pane | `metric` | locale from the host, delta coloured by meaning |
+| Widget | `button` | granted, absent with fallback, refused |
+| Widget | `form` | prefill never submits, and is marked |
+| Notify | `toaster` | a burst becomes one announcement |
+| Notify | `banner` | a condition, not an event |
+| Layout | `stack`, `row`, `spacer`, `divider` | |
+| Layout | `columns` | collapses on the frame's width, not the viewport's |
+| Layout | `card` | names itself for a dashboard of many |
+| Layout | `tabs` | ARIA practice, arrows, Home and End, lazy panels |
+| Layout | `dialog` | native `<dialog>`, which works in the sandbox |
+
+Three sandbox facts established by probing rather than assumption:
+`<form>` submission is blocked in Chromium and fires in WebKit, so it is
+unusable either way; `showModal()` works in both, because `allow-modals`
+governs `alert` and `confirm` rather than `<dialog>`; and `Intl.NumberFormat()`
+with no locale renders 1234567 as `1,234,567` in one engine and `12,34,567` in
+the other.
+
 ## Order
 
 The floor is roughly 110 components, which is a year, not a sprint. The order

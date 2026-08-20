@@ -158,5 +158,37 @@
     "replace": "  read.set = ((next: unknown) => {\n    if (typeof next === \"function\") next = (next as (p: T) => T)(value);\n    if (equals(value, next as T)) return;",
     "suite": "test/unit/reactive.test.js",
     "why": "A signal can no longer hold a function, so a computed returning a formatter silently calls it instead of storing it."
+  },
+  {
+    "name": "every tab sits in the tab order",
+    "file": "src/view/layout/index.ts",
+    "find": "      tabindex: computed(() => (selected() ? \"0\" : \"-1\")),",
+    "replace": "      tabindex: \"0\",",
+    "suite": "test/browser/layout.test.js",
+    "why": "Tab walks through every tab instead of moving past the list, which is the ARIA practice this claims to follow."
+  },
+  {
+    "name": "arrow keys do not move between tabs",
+    "file": "src/view/layout/index.ts",
+    "find": "        if (key === \"ArrowRight\") { event.preventDefault(); move(item.id, 1); }\n        else if (key === \"ArrowLeft\") { event.preventDefault(); move(item.id, -1); }",
+    "replace": "        if (key === \"__never\") { return; }",
+    "suite": "test/browser/layout.test.js",
+    "why": "The tab list is operable by pointer only."
+  },
+  {
+    "name": "hidden tab panels are built anyway",
+    "file": "src/view/layout/index.ts",
+    "find": "      if (active() !== item.id || built.has(item.id)) return;",
+    "replace": "      if (built.has(item.id)) return;",
+    "suite": "test/browser/layout.test.js",
+    "why": "Six tabs fetch six times on open, which is the cost this laziness exists to avoid."
+  },
+  {
+    "name": "columns never collapse",
+    "file": "src/view/layout/index.ts",
+    "find": "      el.classList.toggle(\"collapsed\", entry.contentRect.width < collapseBelow);",
+    "replace": "      void entry;",
+    "suite": "test/browser/layout.test.js",
+    "why": "A host handing out 300 pixels still gets side-by-side columns."
   }
 ]

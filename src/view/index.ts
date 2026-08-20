@@ -15,6 +15,13 @@ export type { Toaster, Banner, Severity, ToastOptions, BannerOptions } from "./n
 export { button } from "./widgets/button.js";
 export type { Button, ButtonOptions, ButtonVariant } from "./widgets/button.js";
 export { form } from "./widgets/form.js";
+export {
+  stack, row, spacer, divider, columns, card, tabs, dialog,
+} from "./layout/index.js";
+export type {
+  StackOptions, ColumnsOptions, CardOptions, Tab, Tabs, TabsOptions,
+  Dialog, DialogOptions, Gap, Align,
+} from "./layout/index.js";
 export type { Form, FormOptions, Field, FieldType } from "./widgets/form.js";
 export type {
   DataTable, DataTableOptions, Column, Row, SortDirection,
