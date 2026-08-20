@@ -82,6 +82,13 @@ the anchor, the suite that catches it, and one line on what breaks. The runner
 applies the mutation, runs that suite, and requires it to fail. A surviving
 mutant means the test is decoration, and CI fails on one.
 
+**Never commit while the mutant runner is running.** It edits the source in
+place and restores it afterwards, so a `git add` during a run captures whatever
+defect is currently applied. This has happened once: a docs commit picked up
+the bar chart drawn from the top of the frame, and the only reason it was
+caught is that `git status` was not clean afterwards. If you are unsure, diff
+the commit against the source before moving on.
+
 This is not a preference. Every defect found here so far got past a green
 suite first, including three the mutation runner caught by itself: two weak
 tests, and one piece of code that turned out to do nothing at all.
