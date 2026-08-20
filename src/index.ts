@@ -4,6 +4,8 @@ export { defineTools, defineTool, type } from "./contract/define.js";
 export type {
   ToolContract, AnyToolContract, Contracts, Implementation, InputOf, OutputOf, ViewProps, Infer,
 } from "./contract/define.js";
+export { compose, Composed, httpUpstream, localUpstream } from "./compose.js";
+export type { ComposeOptions, Upstream, UpstreamTransport } from "./compose.js";
 export { Dispatcher } from "./runtime/dispatch.js";
 export { StdioTransport } from "./transport/stdio.js";
 export { httpHandler, serveHttp } from "./transport/http.js";
@@ -26,10 +28,17 @@ export type { RequestMeta, ClientInfo, ClientCapabilities } from "./protocol/met
 export {
   toJsonSchema, validate, toolDescriptor, viewContents, isStandardSchema,
 } from "./runtime/registry.js";
+export { promptDescriptor } from "./runtime/registry.js";
 export type {
   Context, ToolDefinition, ViewDefinition, ResourceDefinition,
   RegisteredTool, Schema, JsonSchema, StandardSchema, ToolAnnotations,
+  PromptDefinition, PromptMessage, PromptArgument, RegisteredPrompt,
+  ElicitRequest, ElicitOutcome, SampleRequest, SampleOutcome,
 } from "./runtime/registry.js";
+export { Subscriptions, SUBSCRIPTION_ID, agreed } from "./runtime/subscriptions.js";
+export type { SubscriptionFilter } from "./runtime/subscriptions.js";
+export { Outbound, isAnswer } from "./runtime/outbound.js";
+export type { Channel, Answer } from "./runtime/outbound.js";
 export type {
   Id, Request, Notification, Response, Success, Failure, Incoming,
 } from "./protocol/jsonrpc.js";

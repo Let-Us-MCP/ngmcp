@@ -702,5 +702,61 @@
     "replace": "      prompts: { listChanged: true },",
     "suite": "test/integration/protocol-methods.test.js",
     "why": "The capability is what makes the matching subscription filter honourable. Declaring it without prompts invites a client to subscribe to something that can never happen."
+  },
+  {
+    "name": "two servers' views collide behind a gateway",
+    "file": "src/compose.ts",
+    "find": "  qualifyUri(upstream: string, uri: string): string {\n    const at = uri.indexOf(\"://\");\n    if (at < 0) return uri;\n    return `${uri.slice(0, at + 3)}${upstream}/${uri.slice(at + 3)}`;\n  }",
+    "replace": "  qualifyUri(_upstream: string, uri: string): string {\n    return uri;\n  }",
+    "suite": "test/integration/compose.test.js",
+    "why": "Both servers register `ui://app/table`, which is the normal case rather than the unlucky one. Unqualified, whichever upstream is listed first answers for both, so one app renders the other's view."
+  },
+  {
+    "name": "the gateway declares capabilities on the caller's behalf",
+    "file": "src/compose.ts",
+    "find": "      return await upstream.transport.request(request, signal);",
+    "replace": "      const forwarded = { ...(request.params ?? {}) } as Record<string, unknown>;\n      forwarded[\"_meta\"] = {\n        [META.protocolVersion]: PROTOCOL_VERSION,\n        [META.clientCapabilities]: {},\n      };\n      return await upstream.transport.request({ ...request, params: forwarded }, signal);",
+    "suite": "test/integration/compose.test.js",
+    "why": "The upstream stops seeing the real client and starts seeing the gateway, so a tool that requires a capability decides on a fiction. This is the session moved one layer out: the gateway would have to keep the caller's context somewhere to put it back."
+  },
+  {
+    "name": "one upstream down takes the whole listing with it",
+    "file": "src/compose.ts",
+    "find": "      } catch (cause) {\n        return {\n          upstream,\n          error: cause instanceof Error ? cause.message : String(cause),\n        };\n      }",
+    "replace": "      } catch (cause) {\n        throw cause;\n      }",
+    "suite": "test/integration/compose.test.js",
+    "why": "A composition only as available as its least available member is worse than its parts: one server refusing a connection empties a board five other servers could have filled."
+  },
+  {
+    "name": "an unreachable upstream is silently missing",
+    "file": "src/compose.ts",
+    "find": "        ...(unreachable.length ? { _meta: { \"ngmcp/unreachable\": unreachable } } : {}),",
+    "replace": "",
+    "suite": "test/integration/compose.test.js",
+    "why": "An empty list and a list that could not be got look identical, so a client reports `no incidents` when what happened is that the incident server is down."
+  },
+  {
+    "name": "a call goes to whichever upstream is first",
+    "file": "src/compose.ts",
+    "find": "    const upstream = this.#upstreams.find((u) => u.name === prefix);\n    if (!upstream) return null;\n    return { upstream, local: qualified.slice(at + this.#separator.length) };",
+    "replace": "    const upstream = this.#upstreams[0];\n    if (!upstream) return null;\n    return { upstream, local: qualified.slice(at + this.#separator.length) };",
+    "suite": "test/integration/compose.test.js",
+    "why": "Namespacing stops meaning anything: a call to `incidents.list` is answered by the deployments server, which has a tool of the same name and no idea it was asked the wrong question."
+  },
+  {
+    "name": "an upstream name may contain the separator",
+    "file": "src/compose.ts",
+    "find": "      if (upstream.name.includes(\"/\") || upstream.name.includes(this.#separator)) {",
+    "replace": "      if (false) {",
+    "suite": "test/integration/compose.test.js",
+    "why": "`ops.deploys` publishes `ops.deploys.list`, which routes back to an upstream called `ops` that does not exist. The failure then happens at the first call rather than at construction."
+  },
+  {
+    "name": "a cancellation reaches only one upstream",
+    "file": "src/compose.ts",
+    "find": "      await Promise.all(this.#upstreams.map((u) =>\n        u.transport.request(message as Request, signal).catch(() => undefined)));\n      return null;",
+    "replace": "      await this.#upstreams[0]?.transport.request(message as Request, signal)\n        .catch(() => undefined);\n      return null;",
+    "suite": "test/integration/compose.test.js",
+    "why": "The gateway does not know which upstream is running the request being cancelled, because knowing that would be the per-caller state it refuses to keep. Telling one of them leaves the rest running work nobody is waiting for."
   }
 ]
