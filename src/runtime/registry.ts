@@ -19,7 +19,13 @@ export interface StandardSchema<Out = unknown> {
 }
 
 export type JsonSchema = Record<string, unknown>;
-export type Schema<T = unknown> = StandardSchema<T> | JsonSchema;
+/** A JSON Schema that remembers the TypeScript type it describes.
+ *
+ * The phantom is never present at runtime. It exists so that a contract
+ * declared with `type<T>()` still knows what T was by the time a view reads
+ * it, which is the whole mechanism behind the shared contract. */
+export type TypedJsonSchema<T> = JsonSchema & { readonly __type?: T };
+export type Schema<T = unknown> = StandardSchema<T> | TypedJsonSchema<T>;
 
 export const isStandardSchema = (s: unknown): s is StandardSchema =>
   typeof s === "object" && s !== null && "~standard" in s;

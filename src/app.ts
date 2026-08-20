@@ -1,9 +1,18 @@
 import { Dispatcher, type DispatcherOptions } from "./runtime/dispatch.js";
 import { StdioTransport } from "./transport/stdio.js";
+import { httpHandler, serveHttp, type HttpHandlerOptions } from "./transport/http.js";
 import type {
   Context, RegisteredTool, ResourceDefinition, Schema, ToolDefinition, ViewDefinition,
 } from "./runtime/registry.js";
-import type { Incoming, Response } from "./protocol/jsonrpc.js";
+import type { Incoming, Response as RpcResponse } from "./protocol/jsonrpc.js";
+
+/* The platform's Response, named apart from the protocol's. Both are called
+ * Response and they are entirely different things. */
+type FetchRequest = globalThis.Request;
+type FetchResponse = globalThis.Response;
+import type {
+  Contracts, Implementation, ToolContract,
+} from "./contract/define.js";
 
 export interface AppOptions {
   name: string;
@@ -15,17 +24,7 @@ export interface AppOptions {
   defaultTimeoutMs?: number;
 }
 
-/** Infers a tool's output type, so a view can be typed against its tool.
- *
- * This is the type that stops the contract being written twice. The server
- * declares the shape once; `ViewProps` gives the view the same shape, and a
- * change on either side stops compiling on both.
- */
-export type Output<T> = T extends { __output: infer O } ? O : never;
-
 export interface ToolHandle<Out> { readonly __output: Out; readonly name: string }
-
-export type ViewProps<T> = { data: Output<T> };
 
 /** An MCP Apps server.
  *
@@ -78,10 +77,48 @@ export class App {
     return uri;
   }
 
+  /** Implement a declared contract set.
+   *
+   * Every tool in the contract must be supplied and every signature is
+   * checked, so adding a tool to the shared declaration stops the server
+   * compiling until it is implemented. That is the whole point: the failure
+   * happens at the keyboard rather than at a client.
+   */
+  implement<C extends Contracts>(
+    contracts: C,
+    handlers: Implementation<C, Context>,
+  ): this {
+    for (const name of Object.keys(contracts)) {
+      const contract = contracts[name] as ToolContract<unknown, unknown>;
+      const handler = handlers[name as keyof C] as
+        (input: unknown, context: Context) => unknown;
+      const definition: ToolDefinition = {};
+      if (contract.description) definition.description = contract.description;
+      if (contract.title) definition.title = contract.title;
+      if (contract.input) definition.input = contract.input as never;
+      if (contract.output) definition.output = contract.output as never;
+      if (contract.annotations) definition.annotations = contract.annotations;
+      if (contract.view) definition.view = contract.view;
+      if (contract.visibility) definition.visibility = contract.visibility;
+      if (contract.requires) definition.requires = contract.requires;
+      if (contract.timeoutMs !== undefined) definition.timeoutMs = contract.timeoutMs;
+      if (contract.summary) {
+        definition.summary = contract.summary as (output: unknown) => string;
+      }
+      this.tool(name, definition, handler);
+    }
+    return this;
+  }
+
   /** Register a plain resource. */
   resource(uri: string, resource: Omit<ResourceDefinition, "uri">): string {
     this.#resources.set(uri, { uri, ...resource });
     return uri;
+  }
+
+  /** The `ui://` uris registered on this app, in registration order. */
+  get viewUris(): string[] {
+    return [...this.#views.keys()];
   }
 
   get dispatcher(): Dispatcher {
@@ -102,7 +139,7 @@ export class App {
   }
 
   /** Answer one message. The whole server, with no transport attached. */
-  handle(message: Incoming): Promise<Response | null> {
+  handle(message: Incoming): Promise<RpcResponse | null> {
     return this.dispatcher.handle(message);
   }
 
@@ -111,6 +148,19 @@ export class App {
     const transport = new StdioTransport(this.dispatcher);
     transport.start();
     return transport;
+  }
+
+  /** A `Request` to `Response` handler: Node, Workers, Deno, Bun.
+   *
+   * The same object that serves stdio. Nothing about it changes, because
+   * nothing about it was per-connection to begin with. */
+  fetch(options?: HttpHandlerOptions): (request: FetchRequest) => Promise<FetchResponse> {
+    return httpHandler(this.dispatcher, options);
+  }
+
+  /** Serve over HTTP with Node's built-in server. */
+  serveHttp(options?: HttpHandlerOptions & { port?: number; hostname?: string }) {
+    return serveHttp(this.dispatcher, options);
   }
 }
 

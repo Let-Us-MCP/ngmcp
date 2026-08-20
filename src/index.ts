@@ -1,7 +1,15 @@
 export { App } from "./app.js";
-export type { AppOptions, ToolHandle, ViewProps, Output } from "./app.js";
+export type { AppOptions, ToolHandle } from "./app.js";
+export { defineTools, defineTool, type } from "./contract/define.js";
+export type {
+  ToolContract, AnyToolContract, Contracts, Implementation, InputOf, OutputOf, ViewProps, Infer,
+} from "./contract/define.js";
 export { Dispatcher } from "./runtime/dispatch.js";
 export { StdioTransport } from "./transport/stdio.js";
+export { httpHandler, serveHttp } from "./transport/http.js";
+export { devHost } from "./dev/host.js";
+export type { DevHostOptions } from "./dev/host.js";
+export type { HttpHandlerOptions } from "./transport/http.js";
 export { Limiter, RequestLifetime, TimeoutError, systemClock } from "./runtime/concurrency.js";
 export type { Clock } from "./runtime/concurrency.js";
 export { InFlight, RequestNotifier } from "./runtime/notifications.js";
