@@ -269,6 +269,11 @@ That fourth one is the real ceiling. Everything above it is buildable now.
 | Layout | `card` | names itself for a dashboard of many |
 | Layout | `tabs` | ARIA practice, arrows, Home and End, lazy panels |
 | Layout | `dialog` | native `<dialog>`, which works in the sandbox |
+| Agent | `proposal` | the agent proposes, the person decides; no auto-apply |
+| Agent | `approvalCard` | provenance required, high risk types the title back |
+| Agent | `taskList` | progress that does not roll back on cancellation |
+| Agent | `stream` | `aria-live="off"` plus a summary on an interval |
+| Surface | `hostBridge` | postMessage, ids correlated, order not assumed |
 
 Three sandbox facts established by probing rather than assumption:
 `<form>` submission is blocked in Chromium and fires in WebKit, so it is
@@ -282,14 +287,13 @@ the other.
 The floor is roughly 110 components, which is a year, not a sprint. The order
 that gets something usable soonest:
 
-1. `DataTable`, `Metric`, `Toast`, `Banner`, `Button`, `Form` — covers the
-   dashboard and the data explorer, the two commonest MCP apps.
-2. Layout: `Stack`, `Columns`, `Tabs`, `Card`, `Dialog`.
-3. Agent: `Proposal`, `ApprovalCard`, `TaskList`, `Stream`.
-4. Charts, starting with `LineChart` and `Sparkline`.
-5. `ListTemplate` and `GridStack`, at which point it is a dashboard rather
+1. ~~`DataTable`, `Metric`, `Toast`, `Banner`, `Button`, `Form`~~ done.
+2. ~~Layout: `Stack`, `Columns`, `Tabs`, `Card`, `Dialog`~~ done.
+   ~~Agent: `Proposal`, `ApprovalCard`, `TaskList`, `Stream`~~ done.
+3. Charts, starting with `LineChart` and `Sparkline`.
+4. `ListTemplate` and `GridStack`, at which point it is a dashboard rather
    than a page.
-6. Everything else, by demand.
+5. Everything else, by demand.
 
 Each one lands with its three host states, its keyboard route, its axe
 assertion and its mutant, or it does not land.

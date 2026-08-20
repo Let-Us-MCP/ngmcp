@@ -11,6 +11,39 @@ and what is not here is listed at the bottom rather than implied.
 npm install @churning_mcp/server
 ```
 
+## One declaration, both sides
+
+The shape of a tool's result is written once, in a file the server and the
+view both import. The server is checked against it when it implements the
+tool; the view is checked against it when it calls one.
+
+```ts
+// contract.ts
+export const contracts = defineTools({
+  list_deployments: {
+    view: "ui://explorer/table",
+    input:  type<{ env?: "production" | "staging" }>(),
+    output: type<{ deployments: Deployment[] }>(),
+    summary: (out) => `${out.deployments.length} deployments`,
+  },
+});
+
+// server.ts — every tool must be implemented, with the declared shapes
+app.implement(contracts, {
+  list_deployments: async ({ env }) => ({ deployments: await load(env) }),
+});
+
+// view.ts — `contracts` is imported as a type, so no server code is bundled
+const api = client<typeof contracts>({ bridge });
+const { deployments } = await api.list_deployments({ env: "production" });
+```
+
+No `?.`, no `?? []`. Rename a field in the contract and both halves stop
+compiling; add a tool and the server stops compiling until it is written.
+
+`test/types/` compiles nine cases and requires the wrong ones to fail, because
+a broken contract is a type error and nothing a runtime test can see.
+
 ```ts
 import { App } from "@churning_mcp/server";
 
@@ -109,20 +142,41 @@ The integration and concurrency suites drive real subprocesses over real
 pipes with a bare client rather than an SDK, because they have to send
 malformed and out-of-version messages that an SDK refuses to construct.
 
+## Transports
+
+The same `App` answers all of them, because nothing about it is
+per-connection:
+
+```ts
+app.serve();                      // stdio
+await app.serveHttp({ port: 8787 });   // node http
+export default { fetch: app.fetch() }; // workers, deno, bun
+```
+
+There is no session id, no sticky routing and nothing shared between
+instances. Two processes that have never spoken answer the same request
+identically, which is asserted rather than claimed.
+
+## Developing
+
+```ts
+import { devHost } from "@churning_mcp/server";
+const { url } = await devHost(app, { watch: "./src" });
+```
+
+A host to develop against: it renders the view in a frame sandboxed the way
+the specification requires, proxies the view's tool calls, logs the traffic
+both ways, and reloads when a file changes.
+
+It also has a **refuse the next call** switch. That is the point of it. A dev
+host that only ever succeeds teaches an application to assume it always will,
+and the first refusal then happens in front of a user.
+
 ## Not here yet
 
 Named because a reader should not have to find out by trying.
 
-- **The shared type between a tool and its view.** `ViewProps` and `Output`
-  exist in `app.ts` and nothing consumes them. A TypeScript view can already
-  write `ViewProps<typeof listDeployments>` and get the tool's output shape,
-  but no example does, and no check would notice if that stopped working. It
-  is the reason this package exists and it is not finished.
-- **HTTP.** Stdio only. Statelessness is what will make an HTTP handler and a
-  serverless invocation the same object, and neither is written.
 - **Prompts, elicitation, sampling, `subscriptions/listen`.** None implemented.
-- **A dev loop.** No host emulator, no hot reload. Views are exercised by the
-  test harness in `test/browser/`, which is not a thing you can develop in.
 - **Claude Code cannot use it**, through no fault of this package. See
   `docs/findings/001`.
 

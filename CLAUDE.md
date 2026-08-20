@@ -65,6 +65,41 @@ Some other things learned the hard way:
   the `App` object first, then over stdio, and compare.
 - **A mutant that removes one of two redundant guards proves nothing.** Remove
   every guard the test claims to cover.
+- **If a guard is unreachable, the fix is usually to expose the path, not to
+  delete the guard.** The approval card's protection against deciding twice
+  survived its mutant because the only route was a button that had already
+  disabled itself. Exposing `decide()` made the guard reachable, testable and
+  genuinely useful. Deleting it would have been the wrong call, because the
+  thing it protects is a record of what a person agreed to.
+
+## The contract
+
+`src/contract/define.ts` is the reason the package exists. One declaration,
+imported by the server for its values and by the view as a type, so the shape
+of a tool's result is written once rather than twice.
+
+- `defineTools({...})` declares. `type<T>(jsonSchema?)` attaches a TypeScript
+  type to a wire schema without needing a validation library.
+- `app.implement(contracts, handlers)` type-checks the server. Every declared
+  tool must be supplied, with the declared shapes.
+- `client<typeof contracts>({ bridge })` type-checks the view. One method per
+  tool, arguments and result both known.
+
+Two things to keep right, both learned by getting them wrong:
+
+- The bound is `AnyToolContract`, **not** `ToolContract<never, never>`.
+  Nothing is assignable to `Schema<never>`, so the obvious bound rejects every
+  real contract. Types are read off the phantom by `InputOf` and `OutputOf`.
+- `Client` maps with `-?`. Without it `noUncheckedIndexedAccess` makes every
+  method optional and views write `api.tool?.()`, which puts back exactly the
+  doubt the contract removes.
+
+**`test/types/` is how this stays true.** A broken contract is a type error
+and nothing a runtime test can observe, so each case is compiled alone: files
+marked `@expect: compiles` must produce no error, and `@expect-error: <text>`
+must produce one containing that text. A case that was meant to fail and
+compiled cleanly is the interesting failure. The shipped example is compiled
+there too, so it cannot drift.
 
 ## The component library
 
@@ -78,6 +113,20 @@ Panel's taxonomy with one addition, and the reasoning is in `PHILOSOPHY.md`:
   display mode.
 - **Surface** is the host relationship itself. Not built yet.
 
+The **agent** group in `src/view/agent/` is the part nothing else has, and
+each one encodes a rule rather than a widget:
+
+- `proposal` shows a change beside what it would replace and applies nothing
+  until a person accepts. There is deliberately no `autoAccept`.
+- `approvalCard` requires provenance: who asked, on whose behalf, which tool,
+  which arguments verbatim, what was approved before. High risk types the
+  title back. `decide()` is exposed so the guard against deciding twice lives
+  in the decision rather than in a button that disables itself.
+- `taskList` never rolls progress back on cancellation. Three of five steps
+  did happen, and zero says otherwise.
+- `stream` is `aria-live="off"` with a summary on an interval, and says
+  nothing at all when nothing arrived.
+
 Every component carries four properties, or it does not land:
 
 1. Three host states where a capability is involved: granted, absent, refused.
@@ -85,6 +134,28 @@ Every component carries four properties, or it does not land:
 2. A keyboard route. Always.
 3. Accessibility asserted, not claimed.
 4. Its own tests, and the mutant they must kill.
+
+## Transports and the dev host
+
+`src/transport/http.ts` is short, and the shortness is the point: no sessions
+to key, no `Mcp-Session-Id`, nothing shared between instances, no sticky
+routing. `app.fetch()` returns a `Request` to `Response` handler that runs
+unchanged on Node, Workers, Deno and Bun. There is no GET endpoint, because
+`2026-07-28` removed it along with sessions.
+
+Two things worth keeping right:
+
+- The DOM `Response` and the protocol's `Response` are different types with
+  the same name. `app.ts` aliases them apart; do not let them merge.
+- A protocol-level refusal stays HTTP 200 with the error in the body, as
+  JSON-RPC intends. The one exception the specification names is a malformed
+  request, which is 400.
+
+`src/dev/host.ts` is a host to develop against. It grants everything and says
+so in the page, because that is the condition under which an application looks
+more portable than it is. **The refuse switch is the reason it exists**: a dev
+host that only ever succeeds teaches an app to assume success, and the first
+refusal then happens in front of a user.
 
 ## Sandbox facts, established by probing
 
@@ -110,6 +181,22 @@ Do not assume any of these; they were all checked, and two were surprises.
   argument, because a signal has to be able to hold one: a `computed` that
   returns a formatter is a normal thing to want. Use `update(fn)` to derive
   from the previous value.
+- **`Reactive<T>` accepts a getter.** `T | Signal<T> | (() => T)`, so
+  `disabled: () => selected().length === 0` works without wrapping it in
+  `computed`. Unambiguous because no component takes a function as a value.
+- **A row is `object`, not `Record<string, unknown>`.** A declared interface is
+  not assignable to the latter, so requiring it rejects exactly the typed
+  shapes a contract produces. Read cells through the `cell()` helper.
+- **The host bridge is `postMessage`.** `hostBridge()` in `src/view/bridge.ts`
+  is the smallest correct one: an id out, the same id back, no assumption that
+  replies arrive in order. `ext-apps` supplies a fuller one where a host
+  already speaks to it; this exists so a view can be built and tested without
+  one, and so the shape a host must provide is written down.
+- **Examples are built, not interpreted.** `tools/build-examples.mjs` bundles
+  `view.ts` into `dist/view.html` and `server.ts` into `dist/server.mjs`. The
+  server reads the built HTML rather than bundling on boot: bundling at
+  startup pays on every start and needs the source tree in production, which
+  is not how anything ships.
 - **A view must be bundled.** Nothing can be fetched inside a `ui://` frame,
   so `bundleView()` inlines everything. `esbuild` is a development dependency,
   imported lazily, so the server runtime keeps no dependencies.
