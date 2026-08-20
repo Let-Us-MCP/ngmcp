@@ -90,7 +90,7 @@
   {
     "name": "selection is not keyed to a stable row id",
     "file": "src/view/panes/data-table.ts",
-    "find": "const defaultId = (row: Row): string =>\n  String(row[\"id\"] ?? JSON.stringify(row));",
+    "find": "const defaultId = (row: Row): string =>\n  String(cell(row, \"id\") ?? JSON.stringify(row));",
     "replace": "let counter = 0;\nconst defaultId = (_row: Row): string => String(counter++);",
     "suite": "test/browser/data-table.test.js",
     "why": "Selection is dropped whenever the row list is rebuilt, which filtering does."
@@ -190,5 +190,77 @@
     "replace": "      void entry;",
     "suite": "test/browser/layout.test.js",
     "why": "A host handing out 300 pixels still gets side-by-side columns."
+  },
+  {
+    "name": "the contract stops carrying its output type",
+    "file": "src/contract/define.ts",
+    "find": "export type OutputOf<C> = C extends { output?: infer S } ? Infer<S> : unknown;",
+    "replace": "export type OutputOf<C> = unknown;",
+    "suite": "test/types/check.mjs",
+    "why": "A view can read any field off any tool result again, which is the doubt the contract exists to remove."
+  },
+  {
+    "name": "the server is not checked against the contract",
+    "file": "src/contract/define.ts",
+    "find": "export type Implementation<C extends Contracts, Ctx> = {\n  [K in keyof C]: (\n    input: InputOf<C[K]>,\n    context: Ctx,\n  ) => OutputOf<C[K]> | Promise<OutputOf<C[K]>>;\n};",
+    "replace": "export type Implementation<C extends Contracts, Ctx> = Record<string, (input: any, context: Ctx) => any>;",
+    "suite": "test/types/check.mjs",
+    "why": "A server can return the wrong shape, or omit a declared tool, and nothing notices until a client calls it."
+  },
+  {
+    "name": "the typed client is optional-chained away",
+    "file": "src/view/client.ts",
+    "find": "  [K in keyof C]-?: (input?: InputOf<C[K]>) => Promise<OutputOf<C[K]>>;",
+    "replace": "  [K in keyof C]?: (input?: InputOf<C[K]>) => Promise<OutputOf<C[K]>>;",
+    "suite": "test/types/check.mjs",
+    "why": "Every call needs `api.tool?.()`, which reintroduces exactly the doubt the contract removes."
+  },
+  {
+    "name": "proposing applies the change",
+    "file": "src/view/agent/proposal.ts",
+    "find": "      pending.set(rationale === undefined ? { value } : { value, rationale });",
+    "replace": "      pending.set(rationale === undefined ? { value } : { value, rationale });\n      void options.onAccept(value);",
+    "suite": "test/browser/agent.test.js",
+    "why": "The agent edits directly and the review the interface implies becomes decoration."
+  },
+  {
+    "name": "a high-risk approval needs no confirmation",
+    "file": "src/view/agent/approval.ts",
+    "find": "    && (!needsConfirmation || typed().trim() === request.title));",
+    "replace": "  );",
+    "suite": "test/browser/agent.test.js",
+    "why": "Irreversible money movement is one click away, with nothing between the agent's request and the act."
+  },
+  {
+    "name": "an approval can be decided twice",
+    "file": "src/view/agent/approval.ts",
+    "find": "    if (busy.peek() || decision.peek() !== null) return;",
+    "replace": "    if (busy.peek()) return;",
+    "suite": "test/browser/agent.test.js",
+    "why": "A denied request can then be approved, which makes the record of what happened untrue."
+  },
+  {
+    "name": "cancelling a task rolls its progress back to zero",
+    "file": "src/view/agent/tasks.ts",
+    "find": "      \"aria-valuenow\": String(Math.round(task.percent)),",
+    "replace": "      \"aria-valuenow\": String(task.state === \"cancelled\" ? 0 : Math.round(task.percent)),",
+    "suite": "test/browser/agent.test.js",
+    "why": "It says nothing happened, when three of five steps did and were not rolled back."
+  },
+  {
+    "name": "the stream announces every line",
+    "file": "src/view/agent/tasks.ts",
+    "find": "    \"aria-live\": \"off\",\n    role: \"log\",",
+    "replace": "    \"aria-live\": \"polite\",\n    role: \"log\",",
+    "suite": "test/browser/agent.test.js",
+    "why": "At five lines a second a screen reader reads everything aloud and the reader can do nothing else."
+  },
+  {
+    "name": "the stream speaks even when nothing arrived",
+    "file": "src/view/agent/tasks.ts",
+    "find": "    if (!sinceSpoken) return;",
+    "replace": "    if (false) return;",
+    "suite": "test/browser/agent.test.js",
+    "why": "A quiet log interrupts on a timer to say nothing happened."
   }
 ]

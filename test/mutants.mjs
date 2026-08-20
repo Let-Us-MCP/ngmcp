@@ -22,9 +22,12 @@ const only = onlyIndex > -1 ? process.argv[onlyIndex + 1] : null;
 const build = () => execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: ROOT, stdio: "pipe" });
 
 const runSuite = (suite) => {
+  // A type-level suite is a script rather than a test file, because the thing
+  // it checks is whether the compiler complains.
+  const args = suite.endsWith("check.mjs")
+    ? [suite] : ["--test", "--test-timeout=60000", suite];
   try {
-    execFileSync(process.execPath,
-      ["--test", "--test-timeout=60000", suite], { cwd: ROOT, stdio: "pipe" });
+    execFileSync(process.execPath, args, { cwd: ROOT, stdio: "pipe" });
     return "passed";
   } catch {
     return "failed";

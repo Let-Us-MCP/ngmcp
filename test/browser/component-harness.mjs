@@ -78,6 +78,19 @@ export const BASE_CSS = `
   .tabpanel { padding: 10px 0 }
   .dialog { border: 1px solid #8884; border-radius: 10px; padding: 16px; min-width: 260px }
   .dialog::backdrop { background: #0006 }
+  .proposal { border: 1px solid #fa08; padding: 10px; border-radius: 8px }
+  .proposal-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+  .proposal-text { white-space: pre-wrap; margin: 0; font: 12px/1.4 ui-monospace, monospace }
+  .approval { border: 1px solid #8884; border-radius: 8px; padding: 12px }
+  .approval.risk-high { border-left: 4px solid #c00 }
+  .approval-provenance { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px }
+  .approval-provenance dt { color: #888 } .approval-provenance dd { margin: 0 }
+  .task-bar { height: 6px; background: #8883; border-radius: 3px; overflow: hidden }
+  .task-bar span { display: block; height: 100%; background: #0a84ff }
+  .task { list-style: none; margin-bottom: 10px }
+  .tasks { padding: 0; margin: 0 }
+  .stream-lines { max-height: 160px; overflow-y: auto; font: 11.5px/1.5 ui-monospace, monospace }
+  .stream-line { padding: 1px 4px } .stream-error { color: #c00 }
 `;
 
 /** Mount one component in a sandboxed frame with an opaque origin, the way a

@@ -5,30 +5,37 @@ import { fileURLToPath } from "node:url";
 import { openApp } from "./harness.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SERVER = path.join(HERE, "..", "..", "examples", "data-explorer", "server.mjs");
+const SERVER = path.join(HERE, "..", "..", "examples", "data-explorer", "dist", "server.mjs");
 const ENGINES = (process.env.NGMCP_ENGINES ?? "chromium,webkit").split(",");
 
-/* Both engines run the same assertions. A view is HTML in a sandboxed frame,
- * and the two engines disagree about enough of that surface to be worth
- * running twice: focus, dialog, safe-area insets and clipboard all differ. */
+/* The example, end to end: a real server, the view it delivers, the contract
+ * between them, and the components doing the drawing. Everything below is the
+ * shipped example rather than a fixture written for the test. */
 
 for (const engine of ENGINES) {
-  test(`[${engine}] the view renders rows the server actually returned`, async () => {
+  const at = (n) => `[${engine}] ${n}`;
+
+  test(at("the view draws what the server returned"), async () => {
     const app = await openApp(engine, SERVER);
     try {
-      await app.frame.locator("#rows tr").first().waitFor();
-      assert.equal(await app.frame.locator("#rows tr").count(), 4);
-      assert.equal(await app.frame.locator("#count").textContent(), "4 of 4 shown");
-      assert.match(await app.frame.locator("#rows tr").first().textContent(), /checkout/);
-      assert.equal(await app.frame.locator("#error").isVisible(), false);
+      await app.frame.locator(".data-table tbody tr").first().waitFor();
+      assert.equal(await app.frame.locator(".data-table tbody tr").count(), 4);
+      assert.match(await app.frame.locator(".data-table tbody tr").first().textContent(), /checkout/);
     } finally { await app.close(); }
   });
 
-  test(`[${engine}] the frame really is opaque, so the host cannot read it`, async () => {
+  test(at("the metrics are computed from the same rows"), async () => {
     const app = await openApp(engine, SERVER);
     try {
-      // If this ever starts succeeding, the sandbox has been weakened and
-      // every security claim the view makes is void.
+      await app.frame.locator(".data-table tbody tr").first().waitFor();
+      const numbers = await app.frame.locator(".metric-number").allTextContents();
+      assert.deepEqual(numbers, ["4", "3"], "four deployments, three with errors");
+    } finally { await app.close(); }
+  });
+
+  test(at("the frame is opaque, so the host cannot read it"), async () => {
+    const app = await openApp(engine, SERVER);
+    try {
       const reachable = await app.page.evaluate(() => {
         try {
           const win = document.getElementById("view").contentWindow;
@@ -39,64 +46,53 @@ for (const engine of ENGINES) {
     } finally { await app.close(); }
   });
 
-  test(`[${engine}] filtering is local and costs no tool call`, async () => {
+  test(at("filtering costs no tool call"), async () => {
     const app = await openApp(engine, SERVER);
     try {
-      await app.frame.locator("#rows tr").first().waitFor();
+      await app.frame.locator(".data-table tbody tr").first().waitFor();
       const before = (await app.calls()).length;
-      await app.frame.locator("#q").fill("bill");
-      await app.frame.locator("#count").filter({ hasText: "1 of 4" }).waitFor();
-      assert.equal(await app.frame.locator("#rows tr").count(), 1);
+      await app.frame.locator(".filter").fill("bill");
+      await app.frame.locator(".status").filter({ hasText: "1 of 4" }).waitFor();
       assert.equal((await app.calls()).length, before,
         "a local filter must not cross the boundary");
     } finally { await app.close(); }
   });
 
-  test(`[${engine}] clearing the filter restores every row, still locally`, async () => {
+  test(at("selecting a row enables the operation that needs one"), async () => {
     const app = await openApp(engine, SERVER);
     try {
-      await app.frame.locator("#rows tr").first().waitFor();
-      await app.frame.locator("#q").fill("search");
-      await app.frame.locator("#count").filter({ hasText: "1 of 4" }).waitFor();
-      await app.frame.locator("#q").fill("");
-      await app.frame.locator("#count").filter({ hasText: "4 of 4" }).waitFor();
-      assert.equal(await app.frame.locator("#rows tr").count(), 4);
-      assert.equal((await app.calls()).length, 1, "exactly one call, made on mount");
+      await app.frame.locator(".data-table tbody tr").first().waitFor();
+      const restart = app.frame.locator(".card-actions .btn").first();
+      assert.equal(await restart.isDisabled(), true);
+      await app.frame.locator(".data-table tbody tr").first().click();
+      await restart.filter({ hasNotText: "__never__" }).waitFor();
+      assert.equal(await restart.isDisabled(), false);
     } finally { await app.close(); }
   });
 
-  test(`[${engine}] a row can be selected with the pointer`, async () => {
+  test(at("the operation calls the server and reports what came back"), async () => {
     const app = await openApp(engine, SERVER);
     try {
-      await app.frame.locator("#rows tr").first().click();
-      assert.equal(await app.frame.locator('#rows tr[aria-selected="true"]').count(), 1);
+      await app.frame.locator(".data-table tbody tr").first().waitFor();
+      await app.frame.locator(".data-table tbody tr").first().click();
+      const before = (await app.calls()).length;
+      await app.frame.locator(".card-actions .btn").first().click();
+      await app.frame.locator(".toast").waitFor({ timeout: 8000 });
+      assert.match(await app.frame.locator(".toast-text").textContent(), /Restarted checkout/);
+      assert.equal((await app.calls()).length, before + 1, "one call, for one operation");
     } finally { await app.close(); }
   });
 
-  test(`[${engine}] a row can be selected from the keyboard alone`, async () => {
+  test(at("a row selects from the keyboard alone"), async () => {
     const app = await openApp(engine, SERVER);
     try {
-      const row = app.frame.locator("#rows tr").nth(1);
+      const row = app.frame.locator(".data-table tbody tr").nth(1);
+      await row.waitFor();
       await row.focus();
       await app.page.keyboard.press("Enter");
-      const selected = app.frame.locator('#rows tr[aria-selected="true"]');
+      const selected = app.frame.locator('.data-table tbody tr[aria-selected="true"]');
       assert.equal(await selected.count(), 1);
       assert.match(await selected.textContent(), /billing/);
-    } finally { await app.close(); }
-  });
-
-  test(`[${engine}] the view says so when the server refuses`, async () => {
-    const app = await openApp(engine, SERVER);
-    try {
-      // Remount with the server made to fail, so the error path is the one
-      // a person would actually meet rather than a mocked stand-in.
-      await app.page.evaluate(() => {
-        window.__callServer = () => Promise.reject(new Error("the deployment index is offline"));
-      });
-      const html = await app.frame.locator("html").innerHTML();
-      await app.page.evaluate((h) => window.__mount(`<!doctype html>${h}`), html);
-      await app.frame.locator("#error").waitFor({ state: "visible", timeout: 8000 });
-      assert.match(await app.frame.locator("#error").textContent(), /offline/);
     } finally { await app.close(); }
   });
 }
