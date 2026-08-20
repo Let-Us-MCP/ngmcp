@@ -366,5 +366,45 @@
     "replace": "  const group = \"tabs\";\n",
     "suite": "test/browser/layout.test.js",
     "why": "Tab ids are the caller's and are local to their group, so two groups both holding a tab called `one` point at each other's panels."
+  },
+  {
+    "name": "the table filter has no name at all",
+    "file": "src/view/panes/data-table.ts",
+    "find": "      \"aria-label\": filterLabel,\n      placeholder: filterLabel,\n",
+    "replace": "",
+    "suite": "test/browser/a11y.test.js",
+    "why": "Both names, because either alone is enough and removing one proves nothing. An unnamed search box is announced as `edit text` and the reader has to guess what typing there does."
+  },
+  {
+    "name": "a form label points at nothing",
+    "file": "src/view/widgets/form.ts",
+    "find": "h(\"label\", { for: id, text: field.label }),",
+    "replace": "h(\"label\", { text: field.label }),",
+    "suite": "test/browser/a11y.test.js",
+    "why": "The label still draws, so it looks right and reads wrong: the control has no accessible name and clicking the label no longer focuses it."
+  },
+  {
+    "name": "the dismiss button loses its name",
+    "file": "src/view/notify/index.ts",
+    "find": "type: \"button\", class: \"toast-close\", \"aria-label\": \"Dismiss\",",
+    "replace": "type: \"button\", class: \"toast-close\",",
+    "suite": "test/browser/a11y.test.js",
+    "why": "The glyph inside it is decoration, so the only way to dismiss a notification announces itself as an unnamed button."
+  },
+  {
+    "name": "the progress bar loses its name",
+    "file": "src/view/agent/tasks.ts",
+    "find": "      \"aria-label\": `${task.name} progress`,\n",
+    "replace": "",
+    "suite": "test/browser/a11y.test.js",
+    "why": "Three tasks then expose three progress bars that say only a percentage, and nothing says which task each belongs to."
+  },
+  {
+    "name": "the high-risk confirmation loses its label",
+    "file": "src/view/agent/approval.ts",
+    "find": "            for: `confirm-${request.id}`,\n",
+    "replace": "",
+    "suite": "test/browser/a11y.test.js",
+    "why": "The field where a person types the title back to approve a high-risk action is the last thing that should be unlabelled."
   }
 ]

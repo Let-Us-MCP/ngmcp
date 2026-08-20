@@ -132,7 +132,12 @@ Every component carries four properties, or it does not land:
 1. Three host states where a capability is involved: granted, absent, refused.
    Silence on refusal is the failure this is for.
 2. A keyboard route. Always.
-3. Accessibility asserted, not claimed.
+3. Accessibility asserted, not claimed. `test/browser/a11y.test.js` mounts each
+   component **alone** and runs `axe` over it, in both engines. Alone is the
+   point: an application can lend a component a name from a heading that
+   happens to sit nearby, and the hole then ships. Add a story there when you
+   add a component. What axe cannot check stays in the component's own suite,
+   because no scanner presses arrow keys.
 4. Its own tests, and the mutant they must kill.
 
 ## Transports and the dev host
@@ -174,6 +179,13 @@ Do not assume any of these; they were all checked, and two were surprises.
 - **`Intl.NumberFormat()` with no locale differs by engine.** 1234567 renders
   as `1,234,567` in Chromium and `12,34,567` in WebKit. Take the locale from
   `hostContext.locale`; never rely on the default.
+- **An id a component mints for itself has to be unique per instance.** `uid()`
+  in `src/view/dom.ts` does it. A fixed `id="dialog-title"` was correct for
+  as long as a view held one dialog, and misnamed the second one the moment it
+  held two: `aria-labelledby` resolved to the first dialog's heading, so it
+  announced a title it was not showing. Tab groups had the same defect, since
+  tab ids are the caller's and are local to their group. Assert what an id
+  reaches, never what it is.
 
 ## Two rules in the reactive core
 

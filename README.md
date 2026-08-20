@@ -197,10 +197,15 @@ npm run test:browser
 NGMCP_ENGINES=webkit npm run test:browser
 ```
 
-Two of those tests are load-bearing and were checked against the mutation they
-exist to catch. Filtering the table must cost no tool call, and adding
-`allow-same-origin` to the frame must fail the suite rather than quietly
-weaken every security claim the view makes.
+Two of those tests are load-bearing and each has the mutation it exists to
+catch in `test/mutants.json`: adding `allow-same-origin` to the frame must fail
+the suite rather than quietly weaken every security claim the view makes, and
+an action that needs a selection must not be offered without one.
+
+`test/browser/a11y.test.js` mounts every component **alone** and runs `axe`
+over it in both engines. Alone is the point. The first run in isolation found
+a dialog that announced a different dialog's title, because the component minted
+a fixed `id` and a view is allowed to hold two of anything.
 
 ## Mutants
 

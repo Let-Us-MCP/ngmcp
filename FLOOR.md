@@ -229,7 +229,10 @@ none of the three sources provides them:
    one after somebody noticed.
 3. **Accessibility asserted rather than claimed.** `axe` clean, plus the ARIA
    Authoring Practices keyboard checklist as executable assertions, per
-   component in isolation rather than only through an app that uses it.
+   component in isolation rather than only through an app that uses it. In
+   isolation is where it bites: the first run in isolation found a dialog that
+   announced another dialog's title, which no application-level check would
+   have separated from the application.
 4. **Tests that ship with the component**, so an application inherits the
    checks instead of the prose.
 
@@ -274,6 +277,11 @@ That fourth one is the real ceiling. Everything above it is buildable now.
 | Agent | `taskList` | progress that does not roll back on cancellation |
 | Agent | `stream` | `aria-live="off"` plus a summary on an interval |
 | Surface | `hostBridge` | postMessage, ids correlated, order not assumed |
+
+Each of them is mounted alone and run through `axe` in both engines, and five
+mutants stand behind that suite so it cannot pass by not looking: an unnamed
+filter, a label bound to nothing, an unnamed dismiss button, an unnamed
+progress bar, and an unlabelled high-risk confirmation.
 
 Three sandbox facts established by probing rather than assumption:
 `<form>` submission is blocked in Chromium and fires in WebKit, so it is

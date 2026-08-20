@@ -145,6 +145,14 @@ export async function mount(engineName, source, { css = "" } = {}) {
     <script type="module">${script.replace(/<\/script/gi, "<\\/script")}<\/script>`;
   await page.evaluate((h) => window.__mount(h), html);
   const frame = page.frameLocator("#f");
-  await frame.locator("html[data-ready='1']").waitFor({ timeout: 10000 });
+  try {
+    await frame.locator("html[data-ready='1']").waitFor({ timeout: 10000 });
+  } catch (error) {
+    // A story that throws never sets `data-ready`, and a browser left open
+    // here holds the whole run: the suite finishes and the process does not
+    // exit, which reads as a hang rather than as the one broken story it is.
+    await browser.close();
+    throw error;
+  }
   return { page, frame, engine: engineName, async close() { await browser.close(); } };
 }
