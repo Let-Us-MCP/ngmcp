@@ -542,5 +542,61 @@
     "replace": "      sidebar ? h(\"div\", { class: \"shell-sidebar\" }, sidebar) : null,\n      h(\"div\", { class: \"shell-main\" }, ...children)),",
     "suite": "test/browser/templates.test.js",
     "why": "A view is a document even at 320 pixels inside somebody else's product. Without landmarks a reader has no way to skip the navigation or find the board."
+  },
+  {
+    "name": "absent and refused become the same thing",
+    "file": "src/view/surface.ts",
+    "find": "    if (!has(capability)) {\n      // Never asked, because the host never offered. Asking anyway produces a\n      // rejection that reads like a refusal, and the two want different\n      // handling: absent takes a fallback, refused takes an explanation.\n      note(capability, \"absent\", \"\");\n      return { outcome: \"absent\" as const, reason: \"\" };\n    }\n",
+    "replace": "",
+    "suite": "test/browser/surface.test.js",
+    "why": "The view asks a host that never offered the capability, gets a rejection, and reports it as a refusal. A fallback that should have been offered is never offered, and the record says the host said no when it was never asked."
+  },
+  {
+    "name": "a refusal is thrown at the view instead of answered",
+    "file": "src/view/surface.ts",
+    "find": "    } catch (cause) {\n      const reason = reasonOf(cause);\n      note(capability, \"refused\", reason);\n      return { outcome: \"refused\" as const, reason };\n    }",
+    "replace": "    } catch (cause) {\n      throw cause;\n    }",
+    "suite": "test/browser/surface.test.js",
+    "why": "Every call site now needs a try, so the easiest thing to write is the empty catch, and silence on refusal is the failure this component exists to prevent."
+  },
+  {
+    "name": "the host's insets are ignored",
+    "file": "src/view/surface.ts",
+    "find": "    root.style.setProperty(\"--safe-area-top\", `${inset.top}px`);",
+    "replace": "    root.style.setProperty(\"--safe-area-top\", \"0px\");",
+    "suite": "test/browser/surface.test.js",
+    "why": "The view draws its first row of controls under the notch the host told it about, on exactly the devices where that is unrecoverable."
+  },
+  {
+    "name": "the context the host changes never reaches the view",
+    "file": "src/view/surface.ts",
+    "find": "      context.update((previous) => ({ ...previous, ...(event.data as HostContext) }));\n      return;",
+    "replace": "      return;",
+    "suite": "test/browser/surface.test.js",
+    "why": "A reader who switches to a light theme, or whose locale is corrected, keeps the view they had at mount. The host changes these underneath a view and does not ask first."
+  },
+  {
+    "name": "changing one context field discards the rest",
+    "file": "src/view/surface.ts",
+    "find": "      context.update((previous) => ({ ...previous, ...(event.data as HostContext) }));",
+    "replace": "      context.set(event.data as HostContext);",
+    "suite": "test/browser/surface.test.js",
+    "why": "A host that sends only the theme takes the display mode, the locale and the insets away with it, because a partial update was treated as the whole context."
+  },
+  {
+    "name": "nobody is asked before the view is taken away",
+    "file": "src/view/surface.ts",
+    "find": "        let ready = true;\n        for (const handler of [...teardownHandlers]) {\n          try { if ((await handler()) === false) ready = false; }\n          catch { ready = false; }\n        }",
+    "replace": "        const ready = true;",
+    "suite": "test/browser/surface.test.js",
+    "why": "The handshake answers yes without asking anything, so a view with an unsaved change reports itself ready and loses it."
+  },
+  {
+    "name": "one objection is not enough",
+    "file": "src/view/surface.ts",
+    "find": "          try { if ((await handler()) === false) ready = false; }\n          catch { ready = false; }",
+    "replace": "          try { ready = (await handler()) !== false; }\n          catch { ready = false; }",
+    "suite": "test/browser/surface.test.js",
+    "why": "The last handler to run decides, so an objection is overwritten by any handler registered after it."
   }
 ]

@@ -5,7 +5,11 @@
  */
 export { client, fakeBridge, ToolError } from "./client.js";
 export { hostBridge } from "./bridge.js";
-export type { HostBridgeOptions } from "./bridge.js";
+export type { HostBridgeOptions, HostCalls, HostEvent } from "./bridge.js";
+export { surface } from "./surface.js";
+export type {
+  Surface, SurfaceOptions, HostContext, DisplayMode, Insets, Outcome, Refusal,
+} from "./surface.js";
 export type { Client, Bridge, ClientOptions } from "./client.js";
 export type {
   ToolContract, Contracts, InputOf, OutputOf, ViewProps,
