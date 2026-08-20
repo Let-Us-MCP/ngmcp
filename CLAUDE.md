@@ -22,6 +22,42 @@ argument.
 
 Adding per-connection state would make this a worse FastMCP.
 
+### Four things that look like sessions and are not
+
+Each was added deliberately and each had to answer the same question: can the
+**next** request read it? If yes it is a session. If it dies with the request
+that created it, it is a lifetime.
+
+- **`Outbound`** (`runtime/outbound.ts`) holds questions this server has asked
+  the client — elicitation and sampling — until they are answered. Each entry
+  belongs to one tool call, is cancelled with it, and is gone before the
+  response goes out. There is a mutant for exactly this: remove the abort
+  wiring and a cancelled call leaves its question pending forever, which would
+  make it connection state after all.
+- **`Subscriptions`** (`runtime/subscriptions.ts`) holds open
+  `subscriptions/listen` streams. A subscription **is** an in-flight request:
+  it is entered in the same table, a `notifications/cancelled` finds it the
+  same way, and the response the client has been holding since it opened is
+  what closes it. A server with a hundred subscriptions has a hundred requests
+  in flight.
+- **`Composed`** (`compose.ts`) puts one server in front of several. It
+  remembers nothing about a caller: upstream transports are shared by
+  everybody, and the caller's own `_meta` is forwarded untouched so the
+  upstream decides on the real client rather than on the gateway. A gateway
+  that kept per-caller anything would be the session moved one layer out, and
+  there is a mutant that makes it declare capabilities on the caller's behalf.
+- **The legacy shim** (`transport/legacy.ts`) answers the `initialize` a
+  shipping host still opens with. It is the closest call and the honest
+  version is: what a session would have **remembered**, this **declares**. The
+  handshake is answered from fixed configuration and immediately forgotten.
+  The cost is real and is written down in that file: a legacy client's true
+  capabilities are not observable per request, so `assume` is a statement about
+  the host rather than an observation of it.
+
+The application's own storage is a separate question and is fine. The gallery
+writes verdicts to a file; every call names the check it is grading, and
+restarting the server mid-conversation loses nothing.
+
 ## Commits
 
 - Author is always `krimler <yavan@outlook.com>`. Already set in the repo config.
@@ -107,11 +143,64 @@ there too, so it cannot drift.
 Panel's taxonomy with one addition, and the reasoning is in `PHILOSOPHY.md`:
 
 - **Pane** renders a shape and knows nothing about its source. `dataTable`
-  draws any list of objects; the same rows could be a chart instead.
+  draws any list of objects; the same rows feed `lineChart` unchanged, which is
+  the point of the taxonomy rather than a coincidence.
 - **Widget** holds input state and answers to a person **and** an agent.
 - **Layout** arranges and holds no data, but answers to the host's size and
   display mode.
-- **Surface** is the host relationship itself. Not built yet.
+- **Surface** is the host relationship itself, in `src/view/surface.ts`.
+
+### Charts (`src/view/charts/`)
+
+Inline SVG, never a charting dependency: a view runs in a frame with an opaque
+origin and a restrictive CSP where nothing can be fetched, so a library that
+loads anything at runtime does not work at all. `svg()` in `dom.ts` exists
+because `document.createElement("rect")` produces an `HTMLUnknownElement` that
+takes its attributes and draws nothing.
+
+Three obligations beyond drawing, each with a mutant:
+
+1. **The numbers, not just the picture.** Every chart carries a visually
+   hidden `<table>` of what it drew. Present is not the same as reachable: the
+   mutant hides it from assistive technology and leaves the markup in place.
+2. **A keyboard route through the data.** One tab stop for the plot, arrows
+   between points, Home and End, and a readout that says nothing until
+   somebody moves.
+3. **Redrawn, not snapshotted.** Marks are built inside an `effect`, because a
+   dashboard panel that answered again must not keep showing the previous
+   answer.
+
+`Map` and `Mermaid` from the floor are not in this cut: one needs a projection
+and the other a parser, and each is a dependency-sized problem rather than a
+component.
+
+### Dashboard shells (`src/view/templates/`)
+
+`listTemplate` and `gridStack`, which is the step from a page to a dashboard.
+Four obligations a widget set does not have, all four with mutants:
+
+- Panels load **apart**, and `refresh(id)` costs one panel rather than the
+  board.
+- A panel that failed says so and the board carries on.
+- **Layout is a value.** `layout()` returns a plain serialisable thing the view
+  passes to a tool as an ordinary argument; the server mints a handle. There is
+  nowhere else for it to live, and that is the protocol's answer rather than a
+  limitation of this library.
+- One column at 320 pixels, measured with a `ResizeObserver` on the shell
+  itself, and **placements survive it** — widening puts the board back the way
+  somebody arranged it.
+
+### Surface (`src/view/surface.ts`)
+
+There is no boolean anywhere in it. Every host call answers `granted`,
+`absent` or `refused`, and a refusal is returned rather than thrown, because a
+promise that rejects makes the empty catch the easiest thing to write. `absent`
+means the host never offered the capability and was therefore not asked;
+`refused` means it was asked and said no. Collapsing them is how an export
+button comes to do nothing at all, quietly, in front of a user.
+
+It also carries the teardown handshake: a host taking a view away asks first,
+one objection is enough, and a handler that throws counts as an objection.
 
 The **agent** group in `src/view/agent/` is the part nothing else has, and
 each one encodes a rule rather than a widget:
@@ -156,11 +245,32 @@ Two things worth keeping right:
   JSON-RPC intends. The one exception the specification names is a malformed
   request, which is 400.
 
+`src/transport/legacy.ts` is the shim that lets a shipping host talk to this
+server at all. Every host today opens with `initialize` and a version older
+than `2026-07-28`; this server has neither, on purpose. The shim answers the
+handshake and fills in the `_meta` an older client does not know to send. Read
+the note at the top of that file before changing it: the tempting
+implementation remembers what `initialize` said, and that is the session.
+
+`src/compose.ts` puts one server in front of several, which the extension does
+not describe and `FLOOR.md` calls the largest thing missing. What makes it
+short is statelessness: forwarding a request is copying it, because the request
+carries its own version and capabilities and there is no upstream handshake to
+replay. Two rules it must keep: **one upstream down is one upstream missing**,
+named in `_meta`, never a failed board; and **uris are namespaced**, because
+two servers both registering `ui://app/table` is the normal case rather than
+the unlucky one.
+
 `src/dev/host.ts` is a host to develop against. It grants everything and says
 so in the page, because that is the condition under which an application looks
 more portable than it is. **The refuse switch is the reason it exists**: a dev
 host that only ever succeeds teaches an app to assume success, and the first
-refusal then happens in front of a user.
+refusal then happens in front of a user. It also answers host methods
+(`openLink`, `requestDisplayMode`, `sendSizeChanged` and the rest) and refuses
+by name anything it does not implement, because a host that stays silent on a
+method leaves the view waiting out its timeout — which reads as the app being
+slow rather than as the host not having it. The **ask to tear down** button
+drives the teardown handshake.
 
 ## Sandbox facts, established by probing
 
@@ -213,6 +323,28 @@ Do not assume any of these; they were all checked, and two were surprises.
   so `bundleView()` inlines everything. `esbuild` is a development dependency,
   imported lazily, so the server runtime keeps no dependencies.
 
+## The gallery
+
+`examples/gallery/` is every component reachable as a tool, in a host you
+actually use, and it is where the claim stops being a test result. Each `show_`
+tool draws a screen **and** tells the model exactly what should be visible, so
+the model can walk a person through it and record what they saw with `grade`.
+The model never grades anything itself: it cannot see the view, and the
+instructions say so.
+
+Two things to keep right when adding a component:
+
+- **Add its screen and its checks.** A check is written so it can be answered
+  by looking, without knowing how the thing was built. A check a person cannot
+  decide is not a check.
+- **The same checks are asserted in `test/browser/gallery.test.js`.** A screen
+  that passes there and fails in front of somebody is then a host difference
+  rather than a component nobody checked.
+
+One bundle serves seven `ui://` uris; the screen is injected as a global when
+the view is registered, so there is one build and no chance of six of them
+drifting. There is a mutant for serving them all the same screen.
+
 ## Things that are easy to get wrong
 
 - A handler doing `await new Promise(r => ctx.signal.addEventListener("abort", r))`
@@ -222,7 +354,22 @@ Do not assume any of these; they were all checked, and two were surprises.
 - Progress with no `progressToken` invents a correlation the client cannot
   use. Nothing after the response, ever.
 - `-32002` is retired and forbidden in this version. A missing resource is
-  `-32602`, and never an empty `contents` array.
+  `-32602`, and so is a missing prompt and an unknown tool. Never an empty
+  `contents` array.
+- **A subscription filter is an allow list, not a hint.** The specification
+  says the server MUST NOT send notification types the client did not request,
+  and an empty `resourceSubscriptions` is not a wildcard: a client that named
+  no resources asked about no resources. The acknowledgement must be the first
+  message carrying the subscription's id, and it reports the subset the server
+  can actually honour, so a client is never left waiting for something that
+  cannot arrive.
+- **A server-minted request id must not collide with a client's.** `Outbound`
+  prefixes them `srv-`. The id is the only thing on the wire that tells the two
+  directions apart.
+- **Not every transport can carry every method.** A single HTTP response has no
+  way back, so elicitation and sampling answer `unavailable` and
+  `subscriptions/listen` is refused with a reason. A client left holding a
+  request that will never speak is the worst of the available failures.
 - `server/discover` must answer a client on a version we do not speak, because
   it is how that client learns which versions exist. Everything else refuses
   with `-32022`.

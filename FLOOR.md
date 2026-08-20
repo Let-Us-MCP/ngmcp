@@ -257,6 +257,20 @@ Four things become obligations:
 
 That fourth one is the real ceiling. Everything above it is buildable now.
 
+**All four are now built**, and the fourth turned out to be short rather than
+hard, for a reason that belongs to this protocol version rather than to any
+cleverness here: a request carries its own version and capabilities, so
+forwarding one is copying it. `compose()` mounts several servers behind one,
+namespaces their tools and their view uris, forwards the caller's own `_meta`
+so an upstream decides on the real client, and reports an upstream it could not
+reach rather than quietly returning a shorter list. Under a session-shaped
+protocol the same file would be a connection manager, and it would have to
+replay a handshake it cannot honestly make.
+
+`examples/gallery/` is all of it at once: seven screens, a board fed by two
+servers behind a gateway, and a checklist a person grades out loud so the
+claim is something somebody looked at rather than a test result.
+
 ## Built so far
 
 | Kind | Component | Notes |
@@ -276,6 +290,12 @@ That fourth one is the real ceiling. Everything above it is buildable now.
 | Agent | `approvalCard` | provenance required, high risk types the title back |
 | Agent | `taskList` | progress that does not roll back on cancellation |
 | Agent | `stream` | `aria-live="off"` plus a summary on an interval |
+| Pane | `lineChart`, `areaChart`, `barChart`, `scatterChart` | inline SVG, keyboard route through the points |
+| Pane | `sparkline` | a line the size of a word, with its numbers behind it |
+| Pane | `heatmap` | every cell carries its number as well as its shade |
+| Shell | `listTemplate` | header, sidebar, main, with the landmarks a page has |
+| Shell | `gridStack` | panels that refresh apart, layout as a value, one column at 320 |
+| Surface | `surface` | granted, absent, refused; insets, display mode, teardown |
 | Surface | `hostBridge` | postMessage, ids correlated, order not assumed |
 
 Each of them is mounted alone and run through `axe` in both engines, and five
@@ -298,9 +318,11 @@ that gets something usable soonest:
 1. ~~`DataTable`, `Metric`, `Toast`, `Banner`, `Button`, `Form`~~ done.
 2. ~~Layout: `Stack`, `Columns`, `Tabs`, `Card`, `Dialog`~~ done.
    ~~Agent: `Proposal`, `ApprovalCard`, `TaskList`, `Stream`~~ done.
-3. Charts, starting with `LineChart` and `Sparkline`.
-4. `ListTemplate` and `GridStack`, at which point it is a dashboard rather
-   than a page.
+3. ~~Charts, starting with `LineChart` and `Sparkline`~~ done, less `Map` and
+   `Mermaid`: one needs a projection and the other a parser.
+4. ~~`ListTemplate` and `GridStack`, at which point it is a dashboard rather
+   than a page~~ done, along with the Surface and the four protocol methods
+   that were missing.
 5. Everything else, by demand.
 
 Each one lands with its three host states, its keyboard route, its axe

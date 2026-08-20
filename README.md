@@ -172,13 +172,50 @@ It also has a **refuse the next call** switch. That is the point of it. A dev
 host that only ever succeeds teaches an application to assume it always will,
 and the first refusal then happens in front of a user.
 
+## Prompts, elicitation, sampling, subscriptions
+
+All four are implemented, and two of them invert the direction: the server
+sends a request and the client answers it. That needs a transport with a way
+back, and where there is none the answer is `unavailable` rather than a hang.
+
+```ts
+const answer = await ctx.elicit({ message: "Why?", requestedSchema: { ... } });
+// accept, decline, cancel — the person's — or unavailable, the client's.
+```
+
+`subscriptions/listen` is the stream that replaced the HTTP GET endpoint, and
+it is how a dashboard panel updates without a conversation turn. A subscription
+is an in-flight request rather than a session: it is cancellable the same way,
+and when it ends nothing is left behind.
+
+## Several servers, one server
+
+```ts
+const gateway = compose({
+  name: "operations",
+  upstreams: [
+    { name: "deploys", transport: httpUpstream("https://deploys.internal/mcp") },
+    { name: "incidents", transport: localUpstream(incidentsApp) },
+  ],
+});
+```
+
+Tools are namespaced, view uris are namespaced so two servers registering
+`ui://app/table` do not collide, and the caller's own `_meta` is forwarded, so
+an upstream tool that requires a capability sees the real client rather than
+the gateway. One upstream being down is one upstream missing from the listing,
+named in `_meta`, not a failed board.
+
 ## Not here yet
 
 Named because a reader should not have to find out by trying.
 
-- **Prompts, elicitation, sampling, `subscriptions/listen`.** None implemented.
+- **`Map` and `Mermaid`.** One needs a projection, the other a parser.
+- **A streaming HTTP transport.** `subscriptions/listen` works over stdio and
+  is refused with a reason over a single HTTP response.
 - **Claude Code cannot use it**, through no fault of this package. See
-  `docs/findings/001`.
+  `docs/findings/001`. Claude Desktop reaches it through the `initialize` shim
+  in `src/transport/legacy.ts`; see `examples/gallery/README.md`.
 
 ## Licence
 
