@@ -2,8 +2,10 @@
 
 **A stateless MCP Apps server framework for core protocol `2026-07-28`.**
 
-No sessions. No `initialize`. One typed contract from a tool to the view that
-renders it. Zero runtime dependencies.
+No sessions. No `initialize`. Zero runtime dependencies.
+
+Early: `0.0.1`, stdio only, and the API will change. What is here is tested,
+and what is not here is listed at the bottom rather than implied.
 
 ```ts
 import { App } from "ngmcp";
@@ -102,6 +104,23 @@ npm run test:concurrency
 The integration and concurrency suites drive real subprocesses over real
 pipes with a bare client rather than an SDK, because they have to send
 malformed and out-of-version messages that an SDK refuses to construct.
+
+## Not here yet
+
+Named because a reader should not have to find out by trying.
+
+- **The shared type between a tool and its view.** `ViewProps` and `Output`
+  exist in `app.ts` and nothing consumes them. A TypeScript view can already
+  write `ViewProps<typeof listDeployments>` and get the tool's output shape,
+  but no example does, and no check would notice if that stopped working. It
+  is the reason this package exists and it is not finished.
+- **HTTP.** Stdio only. Statelessness is what will make an HTTP handler and a
+  serverless invocation the same object, and neither is written.
+- **Prompts, elicitation, sampling, `subscriptions/listen`.** None implemented.
+- **A dev loop.** No host emulator, no hot reload. Views are exercised by the
+  test harness in `test/browser/`, which is not a thing you can develop in.
+- **Claude Code cannot use it**, through no fault of this package. See
+  `docs/findings/001`.
 
 ## Licence
 
