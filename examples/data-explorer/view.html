@@ -1,0 +1,75 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif }
+  body { margin: 0; padding: 12px }
+  table { border-collapse: collapse; width: 100% }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #8884 }
+  tr[aria-selected="true"] { background: #0a84ff22 }
+  #count { color: #888; margin: 8px 0 0 }
+  .bad { color: #c00 }
+</style>
+<h1 style="font-size:15px;margin:0 0 10px">Deployments</h1>
+<label for="q" class="sr-only" style="position:absolute;left:-9999px">Filter</label>
+<input id="q" type="search" placeholder="Filter" aria-label="Filter deployments" style="width:100%;padding:6px;margin-bottom:8px">
+<table><thead><tr><th>Service</th><th>Env</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table>
+<p id="count">Loading…</p>
+<p id="error" class="bad" hidden></p>
+<script type="module">
+  // The bridge a host provides. Kept tiny on purpose: everything interesting
+  // is either local to this view or a tool call.
+  const call = (name, args = {}) => new Promise((resolve, reject) => {
+    const id = Math.random().toString(36).slice(2);
+    const onMessage = (event) => {
+      if (event.data?.__id !== id) return;
+      removeEventListener("message", onMessage);
+      event.data.error ? reject(new Error(event.data.error)) : resolve(event.data.result);
+    };
+    addEventListener("message", onMessage);
+    parent.postMessage({ __call: name, __id: id, args }, "*");
+  });
+
+  let all = [];
+  const $ = (s) => document.querySelector(s);
+
+  // Filtering is local. It touches no network and asks nothing of the host,
+  // which is the whole reason it feels instant.
+  function render() {
+    const term = $("#q").value.trim().toLowerCase();
+    const shown = term ? all.filter((d) => d.service.toLowerCase().includes(term)) : all;
+    $("#rows").replaceChildren(...shown.map((d) => {
+      const tr = document.createElement("tr");
+      tr.dataset.id = d.id;
+      for (const key of ["service", "env", "status"]) {
+        const td = document.createElement("td");
+        td.textContent = d[key];
+        tr.append(td);
+      }
+      tr.tabIndex = 0;
+      tr.setAttribute("aria-selected", "false");
+      tr.onclick = () => select(d.id);
+      tr.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(d.id); } };
+      return tr;
+    }));
+    $("#count").textContent = `${shown.length} of ${all.length} shown`;
+  }
+
+  function select(id) {
+    for (const tr of $("#rows").children) {
+      tr.setAttribute("aria-selected", String(tr.dataset.id === id));
+    }
+  }
+
+  $("#q").addEventListener("input", render);
+
+  try {
+    const result = await call("list_deployments", {});
+    all = result.structuredContent.deployments;
+    render();
+  } catch (error) {
+    $("#error").hidden = false;
+    $("#error").textContent = `Could not load deployments. ${error.message}`;
+    $("#count").textContent = "";
+  }
+  document.documentElement.dataset.ready = "1";
+</script>

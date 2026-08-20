@@ -30,11 +30,13 @@
     "test:unit": "node --test 'test/unit/*.test.js'",
     "test:it": "node --test 'test/integration/*.test.js'",
     "test:concurrency": "node --test 'test/concurrency/*.test.js'",
-    "test": "npm run build && npm run test:unit && npm run test:it && npm run test:concurrency",
-    "test:mutants": "node test/mutants.mjs"
+    "test": "npm run build && npm run test:unit && npm run test:it && npm run test:concurrency && npm run test:browser",
+    "test:mutants": "node test/mutants.mjs",
+    "test:browser": "node --test --test-timeout=60000 'test/browser/*.test.js'"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "playwright": "^1.62.1",
     "typescript": "^5.9.3"
   },
   "keywords": [

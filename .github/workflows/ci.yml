@@ -21,3 +21,7 @@ jobs:
         run: npm run test:it
       - name: Concurrency
         run: npm run test:concurrency
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium webkit
+      - name: Views, in Chromium and WebKit
+        run: npm run test:browser

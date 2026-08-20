@@ -106,3 +106,21 @@ malformed and out-of-version messages that an SDK refuses to construct.
 ## Licence
 
 MIT.
+
+## Views
+
+A view is HTML in a frame with an opaque origin. `test/browser/` renders each
+example the way a host does: start the server, read the `ui://` resource it
+names, mount it in a sandboxed frame with no `allow-same-origin`, and proxy the
+view's tool calls back to that server. Every assertion runs in **Chromium and
+WebKit**, because the two disagree about focus, dialogs, insets and clipboard.
+
+```
+npm run test:browser
+NGMCP_ENGINES=webkit npm run test:browser
+```
+
+Two of those tests are load-bearing and were checked against the mutation they
+exist to catch. Filtering the table must cost no tool call, and adding
+`allow-same-origin` to the frame must fail the suite rather than quietly
+weaken every security claim the view makes.
