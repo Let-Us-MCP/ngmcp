@@ -330,6 +330,33 @@ Do not assume any of these; they were all checked, and two were surprises.
   so `bundleView()` inlines everything. `esbuild` is a development dependency,
   imported lazily, so the server runtime keeps no dependencies.
 
+## Drawing in text
+
+`src/text/` renders the same shapes without a DOM: `bars`, `histogram`,
+`sparkline`, `table` (plain or markdown) and `mermaid`. A server imports it
+directly.
+
+This is not a fallback for `src/view/charts/`, and treating it as one is the
+mistake. Plenty of hosts have no frame — every terminal client, a log, a host
+that fetched the `ui://` resource and never made the iframe — and in all of
+them `content` is the whole answer. The usual thing to put there is a sentence,
+which is a description of a result rather than the result, and is exactly the
+flattening an app exists to stop. A bar chart in twelve characters of monospace
+carries the numbers.
+
+Three rules, each with a mutant:
+
+- **A bar carries its own number**, so it is a table that also shows shape
+  rather than a picture to be measured against nothing.
+- **A rate is drawn against 100**, not against the largest value present. Scaled
+  to itself, 63 % is a full-width bar that reads as everyone, and two charts of
+  the same measure stop being comparable. `max` is the option.
+- **Truncation says so.** Silently stopping at five rows is how a list comes to
+  be believed complete.
+
+`examples/titanic/` is the worked example, over 891 real records, and
+`docs/findings/001` carries the recorded Claude Code session that goes with it.
+
 ## The gallery
 
 `examples/gallery/` is every component reachable as a tool, in a host you

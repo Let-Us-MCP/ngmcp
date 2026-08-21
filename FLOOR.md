@@ -96,6 +96,13 @@ Two the cookbook adds and Streamlit has no reason to: layout that responds to
 `Markdown` · `Heading` · `Caption` · `Code` · `Latex` · `Badge` · `Chip` ·
 `Json` · `Help`
 
+`Markdown`, `Json` and `Mermaid` have a second home: `src/text/` renders bars, a
+histogram, a sparkline, a table and a mermaid block **without a DOM**, for the
+half of the answer a host with no frame receives. That is not the same
+component drawn worse — a terminal client has no view surface at all, so text
+is the whole rendering rather than a degraded one, and a server imports it
+directly to build its `content`.
+
 `Html` is deliberately absent. A view already runs in a sandboxed frame with
 an opaque origin, and a component that injects arbitrary markup inside it is
 the one place that boundary can be spent carelessly.

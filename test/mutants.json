@@ -790,5 +790,85 @@
     "replace": "      unreachable: [],",
     "suite": "test/browser/gallery.test.js",
     "why": "A board that quietly drops a server reports `no billing incidents` when what happened is that billing is down, which is the opposite of what the reader needs to know."
+  },
+  {
+    "name": "a text bar shows length without its number",
+    "file": "src/text/index.ts",
+    "find": "    return `${pad(textAt(row, label), labelWidth)}  `\n      + `${pad(bar, width)}  ${padStart(`${format(n)}${unit}`, valueWidth)}`;",
+    "replace": "    return `${pad(textAt(row, label), labelWidth)}  ${pad(bar, width)}`;",
+    "suite": "test/unit/text.test.js",
+    "why": "In a host with no frame this is the whole rendering, so a bar without its number leaves the reader measuring characters against nothing. The picture survives and the data does not, which is the flattening an app exists to stop."
+  },
+  {
+    "name": "text bars are scaled from the smallest value",
+    "file": "src/text/index.ts",
+    "find": "  const low = zeroBased ? Math.min(0, ...values) : Math.min(...values);",
+    "replace": "  const low = Math.min(...values);",
+    "suite": "test/unit/text.test.js",
+    "why": "62 against 58 is drawn as a full bar against an empty one. Every number is true and the picture says something that is not."
+  },
+  {
+    "name": "a histogram drops its largest value",
+    "file": "src/text/index.ts",
+    "find": "    const index = Math.min(buckets - 1, Math.floor((v - low) / step));",
+    "replace": "    const index = Math.floor((v - low) / step);",
+    "suite": "test/unit/text.test.js",
+    "why": "The maximum lands one past the last bucket and is silently discarded, so the distribution is missing exactly the value a reader is most likely to be looking for."
+  },
+  {
+    "name": "a truncated table does not say it truncated",
+    "file": "src/text/index.ts",
+    "find": "    out.push(`\u2026 and ${rows.length - limit} more`);",
+    "replace": "",
+    "suite": "test/unit/text.test.js",
+    "why": "A reader takes five rows for the whole answer. Silently stopping is how a list comes to be believed complete."
+  },
+  {
+    "name": "a markdown table loses its alignment row",
+    "file": "src/text/index.ts",
+    "find": "  const rule = markdown\n    ? line(columns.map((column, i) => (column.align === \"end\"\n        ? `${\"-\".repeat(widths[i]! - 1)}:`\n        : \"-\".repeat(widths[i]!))))\n    : columns.map((_, i) => \"-\".repeat(widths[i]!)).join(\"  \");",
+    "replace": "  const rule = columns.map((_, i) => \"-\".repeat(widths[i]!)).join(\"  \");",
+    "suite": "test/unit/text.test.js",
+    "why": "Without the alignment row a markdown host does not treat it as a table at all: it renders as a run of pipe characters, and the numbers stop being a column."
+  },
+  {
+    "name": "a mermaid label is not quoted",
+    "file": "src/text/index.ts",
+    "find": "  const quote = (text: string) => `\"${text.replace(/\"/g, \"'\")}\"`;",
+    "replace": "  const quote = (text: string) => text;",
+    "suite": "test/unit/text.test.js",
+    "why": "A label containing a bracket ends its node early, so the diagram draws and is wrong. A diagram that is wrong is worse than one that is absent, because nobody checks it."
+  },
+  {
+    "name": "a percentage bar is scaled to its own largest value",
+    "file": "src/text/index.ts",
+    "find": "  const high = options.max ?? Math.max(...values);",
+    "replace": "  const high = Math.max(...values);",
+    "suite": "test/unit/text.test.js",
+    "why": "63% draws as a full-width bar, which reads as everyone \u2014 most strongly to whoever is skimming. It also makes two charts of the same measure incomparable, because each is scaled to whatever happened to be in it."
+  },
+  {
+    "name": "the CSV is split naively on commas",
+    "file": "examples/titanic/server.ts",
+    "find": "    if (c === '\"') { quoted = true; continue; }",
+    "replace": "",
+    "suite": "test/integration/titanic.test.js",
+    "why": "Half the names in this dataset contain a comma inside quotes. Splitting naively shifts every column after the name, so ages become ticket numbers and the totals still look plausible."
+  },
+  {
+    "name": "an unrecorded age is counted as zero",
+    "file": "examples/titanic/server.ts",
+    "find": "  age: at(row, \"Age\") === \"\" ? null : Number(at(row, \"Age\")),",
+    "replace": "  age: Number(at(row, \"Age\") || 0),",
+    "suite": "test/integration/titanic.test.js",
+    "why": "177 passengers have no recorded age. Turning those into zeroes invents 177 newborns, pulls the median down, and every summary downstream inherits it."
+  },
+  {
+    "name": "the chart and the data disagree",
+    "file": "examples/titanic/server.ts",
+    "find": "        rows: [...groups, overall], label: \"band\", value: \"rate\", width: 34,\n        unit: \"%\", max: 100, format: (n) => n.toFixed(1),",
+    "replace": "        rows: groups, label: \"band\", value: \"rate\", width: 34,\n        unit: \"%\", max: 100, format: (n) => n.toFixed(1),",
+    "suite": "test/integration/titanic.test.js",
+    "why": "The two halves of the answer are for different readers. A host with no frame sees only the text, so anything the data says and the text does not is invisible to everyone downstream."
   }
 ]

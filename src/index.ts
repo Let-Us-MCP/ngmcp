@@ -4,6 +4,11 @@ export { defineTools, defineTool, type } from "./contract/define.js";
 export type {
   ToolContract, AnyToolContract, Contracts, Implementation, InputOf, OutputOf, ViewProps, Infer,
 } from "./contract/define.js";
+export { bars, histogram, sparkline, table, mermaid, section } from "./text/index.js";
+export type {
+  BarOptions, HistogramOptions, TableOptions, TableColumn,
+  MermaidOptions, MermaidNode, MermaidEdge, TextRow,
+} from "./text/index.js";
 export { compose, Composed, httpUpstream, localUpstream } from "./compose.js";
 export type { ComposeOptions, Upstream, UpstreamTransport } from "./compose.js";
 export { Dispatcher } from "./runtime/dispatch.js";

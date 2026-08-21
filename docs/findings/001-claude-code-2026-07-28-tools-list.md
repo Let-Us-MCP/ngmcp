@@ -1,6 +1,7 @@
 # Claude Code rejects `tools/list` on the `2026-07-28` path
 
-**Status.** Open, reproduced 2026-08-20 against Claude Code 2.1.237.
+**Status.** Open, reproduced 2026-08-20 against Claude Code 2.1.237 and again
+2026-08-21 against 2.1.238. **Worked around**, not fixed: see the last section.
 **Affects.** Every server that implements `server/discover`, not only this one.
 
 ## What happens
@@ -84,3 +85,43 @@ UI resource never renders and the reporter can establish only that steps 1 and
 
 Reproduce with `node test/fixtures/demo-server.mjs` behind any stdio client
 that speaks `2026-07-28`.
+
+## Re-tested against 2.1.238, and worked around
+
+2026-08-21. The same server, started two ways, pointed at Claude Code 2.1.238
+with `--mcp-config` and `--strict-mcp-config`, asked the same question. What
+differs between the two runs is one environment variable.
+
+| Started as | `mcp_servers` reports | Tools usable |
+|---|---|---|
+| `NGMCP_STRICT=1` — native `2026-07-28`, `server/discover` | `status: "failed"` | none |
+| default — `initialize` shim in front | `status: "connected"` | all four |
+
+So the finding stands on 2.1.238: a server that speaks only this version is
+still unreachable from Claude Code, and the failure is still silent from the
+server side.
+
+What changed here is that there is now something to do about it.
+`src/transport/legacy.ts` answers the `initialize` a shipping host opens with
+and fills in the `_meta` an older client does not know to send. It holds
+nothing while doing it — what a session would have remembered, it declares as
+configuration — so the workaround does not walk back the one constraint.
+
+The evidence, from `examples/titanic/`, is a chart drawn by the server arriving
+in the terminal untouched:
+
+```
+Survival by class, of 891 passengers
+────────────────────────────────────
+First class      █████████████████████▍              63.0%
+Second class     ████████████████▏                   47.3%
+Third class      ████████▎                           24.2%
+Everyone aboard  █████████████                       38.4%
+```
+
+Reproduce either half with:
+
+```
+node examples/titanic/dist/server.mjs                 # shimmed: connects
+NGMCP_STRICT=1 node examples/titanic/dist/server.mjs  # native: fails
+```
