@@ -485,7 +485,7 @@
     "find": "  const format = computed(() => options.format\n    ?? ((value: number) => new Intl.NumberFormat(locale()).format(value)));\n  const cursor = signal(-1);",
     "replace": "  const format = computed(() => options.format\n    ?? ((value: number) => new Intl.NumberFormat().format(value)));\n  const cursor = signal(-1);",
     "suite": "test/browser/charts.test.js",
-    "why": "1234567 renders as 1,234,567 in Chromium and 12,34,567 in WebKit on the same machine, so half the readers get a number they have to stop and parse."
+    "why": "1234567 renders as 1,234,567 in Chromium and 12,34,567 in WebKit on the same machine, so half the readers get a number they have to stop and parse. The test asserts a de-DE grouping precisely so that it fails on any machine rather than only on one whose engine default differs from the locale under test."
   },
   {
     "name": "refreshing a panel refreshes the board",

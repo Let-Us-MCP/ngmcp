@@ -108,6 +108,12 @@ Some other things learned the hard way:
   the `App` object first, then over stdio, and compare.
 - **A mutant that removes one of two redundant guards proves nothing.** Remove
   every guard the test claims to cover.
+- **A test that only fails on your machine is not a test.** The locale mutant
+  survived on CI and died locally: the assertion used `en-US`, and dropping the
+  host locale changes nothing on a runner whose engines already group that way.
+  Assert against a locale that groups differently from any plausible default —
+  `de-DE` gives `1.234.567` — so the defect fails everywhere rather than only
+  where the default happens to disagree.
 - **If a guard is unreachable, the fix is usually to expose the path, not to
   delete the guard.** The approval card's protection against deciding twice
   survived its mutant because the only route was a button that had already

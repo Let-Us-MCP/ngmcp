@@ -121,17 +121,22 @@ for (const engine of ENGINES) {
   });
 
   test(at("the number format comes from the host, not from the engine"), async () => {
-    /* `Intl.NumberFormat()` with no locale renders 1234567 as 1,234,567 in one
-     * engine and 12,34,567 in the other, on the same machine. */
+    /* Asserted with a locale that groups differently from any plausible
+     * default. `en-US` was the obvious choice and was the wrong one: on a
+     * machine whose engines already default to that grouping, dropping the
+     * host locale entirely changes nothing and the test passes over the
+     * defect. It caught the bug locally and not on CI, which is the same as
+     * not catching it. */
     const c = await mount(engine, `${I}
       const c = lineChart({
         rows: [{ day: "Mon", big: 1234567 }, { day: "Tue", big: 1000000 }],
-        x: "day", title: "Requests", locale: "en-US",
+        x: "day", title: "Requests", locale: "de-DE",
         series: [{ key: "big", label: "Requests" }] });
       document.getElementById("root").appendChild(c.el);`);
     try {
       assert.equal(
-        await c.frame.locator(".chart-data tbody td").first().textContent(), "1,234,567");
+        await c.frame.locator(".chart-data tbody td").first().textContent(), "1.234.567",
+        "the host's locale was ignored in favour of the engine's own");
     } finally { await c.close(); }
   });
 
