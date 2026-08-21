@@ -1,7 +1,7 @@
 {
   "name": "@churning_mcp/server",
   "version": "0.0.1",
-  "description": "A stateless MCP server for core protocol 2026-07-28. No sessions, no initialize handshake, no runtime dependencies.",
+  "description": "A stateless MCP Apps server framework for core protocol 2026-07-28. No sessions, no initialize handshake, no runtime dependencies. Charts, dashboard shells and a component library for the view half.",
   "license": "MIT",
   "author": "krimler <yavan@outlook.com>",
   "repository": {
@@ -51,7 +51,12 @@
     "mcp-apps",
     "model-context-protocol",
     "stateless",
-    "2026-07-28"
+    "2026-07-28",
+    "mcp-ui",
+    "charts",
+    "dashboard",
+    "elicitation",
+    "sampling"
   ],
   "publishConfig": {
     "access": "public"

@@ -4,8 +4,8 @@
 
 No sessions. No `initialize`. Zero runtime dependencies.
 
-Early: `0.0.1`, stdio only, and the API will change. What is here is tested,
-and what is not here is listed at the bottom rather than implied.
+Early: `0.0.1`, and the API will change. What is here is tested, and what is
+not here is listed at the bottom rather than implied.
 
 ```
 npm install @churning_mcp/server
@@ -73,7 +73,7 @@ Core MCP `2026-07-28` removed protocol-level sessions and the
 its own protocol version and client capabilities in `_meta`, and servers must
 implement `server/discover`.
 
-Claude Code already speaks it. Its first message to a server is:
+Claude Code sends this as its first message to a server:
 
 ```json
 {"method":"server/discover","params":{"_meta":{
@@ -85,6 +85,14 @@ Claude Code already speaks it. Its first message to a server is:
 `@modelcontextprotocol/sdk` 1.30.0 supports up to `2025-11-25`, and FastMCP,
 `ext-apps` and `mcp-ui` all sit on that SDK. A server built on any of them
 cannot answer the message above.
+
+It does not follow that a server which *can* answer it gets a working
+connection, and this is worth being exact about rather than optimistic.
+Claude Code accepts that `server/discover` and then fails the `tools/list`
+after it, on 2.1.237 and again on 2.1.238. Nothing reaches the server. So a
+`2026-07-28`-only server is currently unreachable from it, and the way through
+is the `initialize` shim below. The whole exchange, both halves, is in
+[`docs/findings/001`](docs/findings/001-claude-code-2026-07-28-tools-list.md).
 
 This package speaks one version and holds no per-connection state, which is
 what lets the same `App` answer a stdio pipe, an HTTP handler or a serverless
@@ -132,10 +140,13 @@ because it reproduced about half the time.
 ## Tests
 
 ```
-npm test               # build, then unit, integration and concurrency
+npm test               # build, types, unit, integration, concurrency, browser
 npm run test:unit      # pure logic, no processes
 npm run test:it        # real servers over real stdio pipes
 npm run test:concurrency
+npm run test:browser   # views, in Chromium and WebKit
+npm run test:types     # contracts, which only the compiler can check
+npm run test:mutants   # every test must kill the defect it exists for
 ```
 
 The integration and concurrency suites drive real subprocesses over real
@@ -157,6 +168,20 @@ There is no session id, no sticky routing and nothing shared between
 instances. Two processes that have never spoken answer the same request
 identically, which is asserted rather than claimed.
 
+Every shipping host still opens with `initialize` and an older version, so
+there is a shim for that:
+
+```ts
+app.serve({ legacy: true });     // answers the handshake, holds nothing
+```
+
+What a session would have **remembered**, it **declares**: the handshake is
+answered from fixed configuration and immediately forgotten, so two processes
+behind a load balancer still answer identically. The cost is written down at
+the top of `src/transport/legacy.ts` — a legacy client's real capabilities are
+not observable per request, so what it is assumed to have is a statement about
+the host rather than an observation of it.
+
 ## Developing
 
 ```ts
@@ -171,6 +196,70 @@ both ways, and reloads when a file changes.
 It also has a **refuse the next call** switch. That is the point of it. A dev
 host that only ever succeeds teaches an application to assume it always will,
 and the first refusal then happens in front of a user.
+
+## The view half
+
+`@churning_mcp/server/view` is what runs inside the frame: a reactive core, and
+components in four kinds, following Panel's taxonomy with one addition.
+
+| Kind | What it is | What is here |
+|---|---|---|
+| **Pane** | draws a shape, knows nothing of its source | `dataTable`, `metric`, `lineChart`, `areaChart`, `barChart`, `scatterChart`, `sparkline`, `heatmap` |
+| **Widget** | holds input state, answers to a person **and** an agent | `button`, `form` |
+| **Layout** | arranges, holds no data | `stack`, `row`, `columns`, `card`, `tabs`, `dialog`, `divider`, `spacer` |
+| **Surface** | the host relationship itself | `surface`, `hostBridge` |
+
+Plus the group nothing else has, in `view/agent/`: `proposal` shows a change
+beside what it would replace and applies nothing until a person accepts;
+`approvalCard` requires provenance and makes a high-risk decision typed rather
+than clicked; `taskList` never rolls progress back on cancellation;
+`stream` says nothing at all when nothing arrived.
+
+And the shells that make it a dashboard rather than a page — `listTemplate` and
+`gridStack`, where panels load and refresh apart, a failed panel does not take
+the board with it, and the layout comes out as a plain value the view hands to
+a tool as an ordinary argument. There is nowhere else for it to live, which is
+the protocol's answer rather than a limitation.
+
+Every component ships three host states where a capability is involved, a
+keyboard route, an `axe` assertion, and the mutant its tests must kill.
+
+## The same shapes, in text
+
+Half the hosts that exist have no frame — every terminal client, a log, a host
+that fetched the `ui://` resource and never made the iframe. There, `content`
+is the whole answer, and the usual thing to put in it is a sentence, which is a
+description of a result rather than the result.
+
+`src/text/` draws instead, with no DOM, so a server imports it directly:
+
+```ts
+import { bars } from "@churning_mcp/server";
+
+bars({ rows: bands, label: "band", value: "rate", max: 100, unit: "%" });
+```
+
+```
+First class      █████████████████████▍              63.0%
+Second class     ████████████████▏                   47.3%
+Third class      ████████▎                           24.2%
+Everyone aboard  █████████████                       38.4%
+```
+
+`bars`, `histogram`, `sparkline`, `table` (plain or markdown) and `mermaid`. A
+rate is drawn against 100 rather than against the largest value present, so
+63 % is not a full bar and two charts of the same measure stay comparable.
+
+## Examples
+
+- **`examples/data-explorer`** — the contract, end to end: one declaration, a
+  server checked against it, a view typed from it.
+- **`examples/titanic`** — 891 real records, answered as bars, a histogram, a
+  markdown table and a mermaid block. The example for a host with no frame.
+- **`examples/gallery`** — every component as a tool, in a host you already
+  use. Each screen tells the model what should be visible, so it can walk a
+  person through it and record what they actually saw. The conversation is the
+  test.
 
 ## Prompts, elicitation, sampling, subscriptions
 
@@ -217,10 +306,6 @@ Named because a reader should not have to find out by trying.
   `docs/findings/001`. Claude Desktop reaches it through the `initialize` shim
   in `src/transport/legacy.ts`; see `examples/gallery/README.md`.
 
-## Licence
-
-MIT.
-
 ## Views
 
 A view is HTML in a frame with an opaque origin. `test/browser/` renders each
@@ -262,3 +347,7 @@ kept talking after it returned.
 
 `test/mutants.json` carries the anchor, the suite and one line on what breaks.
 A stale anchor fails the run rather than being skipped.
+
+## Licence
+
+MIT.

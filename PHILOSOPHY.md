@@ -124,3 +124,14 @@ Four kinds, where Panel has three:
 theme, locale, teardown, and what to do when a capability is withdrawn
 mid-session. It is not a component so much as the ground every component
 stands on, and it is where MCP-specific behaviour concentrates.
+
+Built now, in `src/view/surface.ts`, and the shape it settled into is the part
+worth recording. There is no boolean in it anywhere. Every host call answers
+`granted`, `absent` or `refused`, and a refusal is **returned rather than
+thrown**, because a promise that rejects makes the empty catch the easiest
+thing to write and silence on refusal is the failure the whole kind exists to
+prevent. `absent` and `refused` stay apart because they want different
+handling: one takes a fallback, the other takes an explanation.
+
+That is also the answer to the fifth question Panel never has to ask — what a
+component does when the ground it stands on says no.
