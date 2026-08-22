@@ -250,6 +250,43 @@ Everyone aboard  █████████████                       3
 rate is drawn against 100 rather than against the largest value present, so
 63 % is not a full bar and two charts of the same measure stay comparable.
 
+## Checking a server, any server
+
+```
+npx ngmcp conform -- node ./my-server.mjs
+npx ngmcp conform --url http://localhost:8787/
+```
+
+```
+demo, modern negotiation
+────────────────────────
+      Check                          What was found
+----  -----------------------------  -----------------------------------------
+pass  discover.answers-any-version   offers 2026-07-28
+pass  version.refusal-is-32022       refused with the supported list attached
+FAIL  resource.missing-is-not-32002  -32002 was retired and this version forbids emitting it
+```
+
+It works against **any** MCP server, not only one built here — a harness that
+only agrees with its own implementation is a second copy of the test suite, and
+it will agree with every mistake that implementation makes. Which negotiation
+the server speaks is asked rather than assumed: `modern`, `legacy`, or
+`bridged` for a server with a handshake shim in front, where the `_meta`
+requirements stop being observable from outside and are reported `n/a` rather
+than failed.
+
+Four verdicts, not two. `unknown` is a real answer — a check that could not be
+settled says so and does not fail the run, because a harness that guesses is
+worse than one that admits it does not know.
+
+**Nothing destructive is ever called.** Only a tool annotated `readOnlyHint`
+that needs no arguments is invoked; where none exists, the checks that need one
+report `n/a`. A conformance run that restarts a deployment to inspect a
+progress notification has done more harm than the defect it went looking for.
+
+Exit code is 1 if anything failed. `--json` for a pipe, `--only` for one check,
+`--quiet` for failures alone.
+
 ## Examples
 
 - **`examples/data-explorer`** — the contract, end to end: one declaration, a

@@ -870,5 +870,53 @@
     "replace": "        rows: groups, label: \"band\", value: \"rate\", width: 34,\n        unit: \"%\", max: 100, format: (n) => n.toFixed(1),",
     "suite": "test/integration/titanic.test.js",
     "why": "The two halves of the answer are for different readers. A host with no frame sees only the text, so anything the data says and the text does not is invisible to everyone downstream."
+  },
+  {
+    "name": "the harness calls whatever tool it finds first",
+    "file": "src/conform/index.ts",
+    "find": "      return annotations?.[\"readOnlyHint\"] === true\n        && (!Array.isArray(required) || required.length === 0);",
+    "replace": "      return true;",
+    "suite": "test/integration/conform.test.js",
+    "why": "A conformance run restarts somebody's deployment to check the shape of a progress notification, and invents arguments for a tool that required them. It has then done more harm than the defect it went looking for."
+  },
+  {
+    "name": "an unsettled check is reported as a pass",
+    "file": "src/conform/checks.ts",
+    "find": "const unknown = (note: string): CheckResult => ({ verdict: \"unknown\", note });",
+    "replace": "const unknown = (note: string): CheckResult => ({ verdict: \"pass\", note });",
+    "suite": "test/integration/conform.test.js",
+    "why": "A harness that guesses is worse than one that says it does not know: a check that could not be settled is reported as a requirement met, and the tally stops adding up."
+  },
+  {
+    "name": "a server answering everything looks like a legacy one",
+    "file": "src/conform/index.ts",
+    "find": "  const legacyResult = typeof legacyRaw?.[\"protocolVersion\"] === \"string\"\n    ? legacyRaw : undefined;",
+    "replace": "  const legacyResult = legacyRaw;",
+    "suite": "test/integration/conform.test.js",
+    "why": "A server that answers `initialize` with an empty result is classed as bridged and excused from the checks a modern server must pass, so a server wrong about everything comes out looking better than one wrong about a single thing."
+  },
+  {
+    "name": "late traffic is only noticed when it echoes the right token",
+    "file": "src/conform/checks.ts",
+    "find": "        return method === \"notifications/progress\" || method === \"notifications/message\";",
+    "replace": "        const params = n.message[\"params\"] as Record<string, unknown> | undefined;\n        return method === \"notifications/progress\"\n          && params?.[\"progressToken\"] === `conform-${id}`;",
+    "suite": "test/integration/conform.test.js",
+    "why": "A server sending progress under a token nobody supplied is doing two wrong things at once, and narrowing to a matching token misses both."
+  },
+  {
+    "name": "an unreachable server passes by default",
+    "file": "src/conform/index.ts",
+    "find": "        passed: 0, failed: 1, notApplicable: 0, unknown: 0,",
+    "replace": "        passed: 1, failed: 0, notApplicable: 0, unknown: 0,",
+    "suite": "test/integration/conform.test.js",
+    "why": "A server that answered nothing at all is reported as conforming, which is the one result a harness must never produce."
+  },
+  {
+    "name": "a duplicate tool name goes unreported",
+    "file": "src/conform/checks.ts",
+    "find": "      const seen = new Set<string>();\n      const twice = names.filter((n) => (seen.has(n) ? true : (seen.add(n), false)));",
+    "replace": "      const twice: string[] = [];",
+    "suite": "test/integration/conform.test.js",
+    "why": "Two tools with one name makes every call to it ambiguous, and the server picks. The check exists because the ambiguity is invisible from the listing."
   }
 ]

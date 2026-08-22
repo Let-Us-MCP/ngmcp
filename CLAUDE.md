@@ -387,6 +387,29 @@ One bundle serves seven `ui://` uris; the screen is injected as a global when
 the view is registered, so there is one build and no chance of six of them
 drifting. There is a mutant for serving them all the same screen.
 
+## The conformance harness
+
+`src/conform/` and `src/cli.ts` are `ngmcp conform`, which checks **any** MCP
+server. Three rules, each with a mutant:
+
+- **Nothing destructive is called.** Only a `readOnlyHint` tool needing no
+  arguments is invoked. Where none exists, checks report `n/a` rather than
+  picking something and hoping. Loosening this is the one change here that
+  could damage somebody else's system.
+- **Four verdicts.** `unknown` never becomes a quiet `pass`. A check that could
+  not be settled is reported and does not decide the run.
+- **`bridged` is its own era.** A server answering both `server/discover` and a
+  real `initialize` has a shim in front, so the `_meta` requirements are no
+  longer observable from outside; reporting it as `modern` and failing it for
+  accepting a request without `_meta` blames it for the shim's whole purpose.
+  An `initialize` answered *without* a `protocolVersion` is not a handshake —
+  requiring one stops a server that answers everything from being excused from
+  everything.
+
+`test/fixtures/nonconforming-server.mjs` is wrong on purpose, in ten ways, and
+exists because a harness only ever run against a passing server proves it can
+say yes and nothing else. Add a violation there whenever you add a check.
+
 ## Things that are easy to get wrong
 
 - A handler doing `await new Promise(r => ctx.signal.addEventListener("abort", r))`

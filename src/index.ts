@@ -9,6 +9,10 @@ export type {
   BarOptions, HistogramOptions, TableOptions, TableColumn,
   MermaidOptions, MermaidNode, MermaidEdge, TextRow,
 } from "./text/index.js";
+export { conform, CHECKS, stdioProbe, httpProbe } from "./conform/index.js";
+export type {
+  ConformOptions, Report, Finding, Check, CheckResult, Verdict, Era, Probe,
+} from "./conform/index.js";
 export { compose, Composed, httpUpstream, localUpstream } from "./compose.js";
 export type { ComposeOptions, Upstream, UpstreamTransport } from "./compose.js";
 export { Dispatcher } from "./runtime/dispatch.js";

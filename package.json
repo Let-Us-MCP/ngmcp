@@ -21,6 +21,9 @@
       "default": "./dist/view/index.js"
     }
   },
+  "bin": {
+    "ngmcp": "./dist/cli.js"
+  },
   "files": [
     "dist",
     "README.md",
