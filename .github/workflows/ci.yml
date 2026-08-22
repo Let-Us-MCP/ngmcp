@@ -1,18 +1,38 @@
 name: test
 
+# Two jobs on purpose. `check` is the signal you actually wait for and takes a
+# few minutes; `mutants` applies every mutation in `test/mutants.json` and runs
+# the suite that claims to catch it, which is half an hour and is not something
+# anybody should be watching. Keeping them together meant the fast answer was
+# never available, and a thirty-minute red is a red nobody reads.
+#
+# Prose changes nothing that can be tested, so a documentation-only commit runs
+# neither. That was not a saving worth making until a README fix cost a full
+# mutation sweep.
+
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+  workflow_dispatch:
 
 jobs:
-  test:
+  check:
+    name: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version: "24"
       - run: npm ci
       - run: npm run build
       - name: Contracts, which only the compiler can check
@@ -27,5 +47,21 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Views, in Chromium and WebKit
         run: npm run test:browser
-      - name: Every test must catch the mutant it exists for
-        run: npm run test:mutants
+
+  mutants:
+    name: every test must catch the mutant it exists for
+    runs-on: ubuntu-latest
+    # Nothing is proved by mutating a tree whose tests do not pass, and the
+    # failure would be reported against the wrong thing.
+    needs: check
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - run: npm ci
+      - run: npm run build
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:mutants
