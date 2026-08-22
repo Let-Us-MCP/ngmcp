@@ -58,6 +58,10 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   }
 
   if (method === "tools/call") {
+    // A server-initiated request, which this version removed: input is asked
+    // for inside a result now, so that any instance can take the retry.
+    write({ jsonrpc: "2.0", id: "srv-1", method: "elicitation/create",
+      params: { message: "Who are you?", requestedSchema: { type: "object", properties: {} } } });
     // Progress for a request that supplied no token, inventing a correlation
     // the client cannot use.
     write({ jsonrpc: "2.0", method: "notifications/progress",

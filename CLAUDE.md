@@ -28,12 +28,25 @@ Each was added deliberately and each had to answer the same question: can the
 **next** request read it? If yes it is a session. If it dies with the request
 that created it, it is a lifetime.
 
-- **`Outbound`** (`runtime/outbound.ts`) holds questions this server has asked
-  the client — elicitation and sampling — until they are answered. Each entry
-  belongs to one tool call, is cancelled with it, and is gone before the
-  response goes out. There is a mutant for exactly this: remove the abort
-  wiring and a cancelled call leaves its question pending forever, which would
-  make it connection state after all.
+- **Multi Round-Trip Requests** (`runtime/mrtr.ts`) is how elicitation and
+  sampling work, and it holds nothing at all — which is the point. A handler
+  that needs input throws `InputRequired`, the request answers
+  `input_required`, and the client **retries the same request** with the
+  answer. The handler runs again from the top rather than resuming, so there is
+  no continuation to keep and `requestState` goes unused.
+
+  This replaced an earlier implementation here that sent `elicitation/create`
+  as a server-initiated request and waited for a reply. That was the
+  `2025-*` pattern; `2026-07-28` calls it "no longer supported" and "a
+  breaking change", for exactly this repository's reason — the specification
+  says the round trip works "without requiring a shared storage layer across
+  server instances or requiring stateful load balancing". A server-initiated
+  request needs its answer to reach the process that asked. **If you find
+  yourself adding a server→client request, that is the deleted pattern coming
+  back.**
+
+  The obligation it puts on a handler: be safe to run again up to the point
+  where it asks. Read freely, change nothing until the answer is in hand.
 - **`Subscriptions`** (`runtime/subscriptions.ts`) holds open
   `subscriptions/listen` streams. A subscription **is** an in-flight request:
   it is entered in the same table, a `notifications/cancelled` finds it the

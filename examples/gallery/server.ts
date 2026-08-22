@@ -308,7 +308,7 @@ app.tool("confirm_destructive", {
     + "dialog. Checks whether this host supports elicitation at all.",
   annotations: { destructiveHint: true },
 }, async (_input, ctx) => {
-  const answer = await ctx.elicit({
+  const answer = await ctx.elicit("reason", {
     message: "This would restart checkout in production. Why?",
     requestedSchema: {
       type: "object",
@@ -334,7 +334,7 @@ app.tool("ask_the_model", {
     + "host supports sampling.",
   annotations: { readOnlyHint: true },
 }, async (_input, ctx) => {
-  const answer = await ctx.sample({
+  const answer = await ctx.sample("incident-summary", {
     messages: [{
       role: "user",
       content: {

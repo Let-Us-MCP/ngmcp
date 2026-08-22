@@ -149,148 +149,192 @@ test("the prompts capability is declared only by a server that has prompts", asy
     "a server with no prompts claimed it can tell a client when they change");
 });
 
-/* Elicitation: the server asks the person, through the client. */
+/* Elicitation and sampling, under Multi Round-Trip Requests.
+ *
+ * `2026-07-28` deleted server-initiated requests: a server no longer sends
+ * `elicitation/create` down the wire and waits. It answers `input_required`
+ * saying what it needs, and the client retries the same request with the
+ * answers attached. The specification's reason is this package's reason —
+ * it works "without requiring a shared storage layer across server instances
+ * or requiring stateful load balancing". */
 
-test("a tool asks the person a question and gets their answer back", async () => {
-  const c = connect({
-    answer: (message) => {
-      if (message.method !== "elicitation/create") return undefined;
-      return { result: { action: "accept", content: { reason: "Rolling back the deploy" } } };
-    },
-  });
+const ELICIT_CAPS = meta({
+  "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } },
+});
+const SAMPLE_CAPS = meta({
+  "io.modelcontextprotocol/clientCapabilities": { sampling: {} },
+});
+
+test("a tool that needs input says so, rather than asking down the wire", async () => {
+  const c = connect();
   try {
-    const called = await c.request("tools/call",
-      { name: "restart", arguments: { id: "d1" } },
-      meta({ "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } } }));
-    assert.equal(called.result.structuredContent.reason, "Rolling back the deploy");
-    assert.equal(called.result.structuredContent.action, "accept");
+    const first = await c.request("tools/call",
+      { name: "restart", arguments: { id: "d1" } }, ELICIT_CAPS);
 
-    const asked = c.asked.find((m) => m.method === "elicitation/create");
-    assert.equal(asked.params.mode, "form");
-    assert.match(asked.params.message, /Why/);
-    assert.equal(asked.params.requestedSchema.type, "object");
-    assert.deepEqual(asked.params.requestedSchema.required, ["reason"]);
-    // The server minted the id, and it cannot be mistaken for a client's.
-    assert.match(String(asked.id), /^srv-/);
+    assert.equal(first.result.resultType, "input_required");
+    const asked = first.result.inputRequests;
+    assert.deepEqual(Object.keys(asked), ["why"]);
+    assert.equal(asked.why.method, "elicitation/create");
+    assert.equal(asked.why.params.mode, "form");
+    assert.match(asked.why.params.message, /Why/);
+    assert.deepEqual(asked.why.params.requestedSchema.required, ["reason"]);
+
+    // Nothing was sent to the client as a request of its own.
+    assert.equal(c.asked.length, 0,
+      "the server sent a server-initiated request, which this version removed");
+
+    // And nothing happened yet: the handler stops before it changes anything.
+    assert.equal(first.result.structuredContent, undefined);
   } finally { await c.close(); }
 });
 
-test("declining is the person's answer and reaches the handler as one", async () => {
-  const c = connect({
-    answer: (message) => message.method === "elicitation/create"
-      ? { result: { action: "decline" } } : undefined,
-  });
+test("the retry carries the answer and the same request completes", async () => {
+  const c = connect();
   try {
-    const called = await c.request("tools/call",
-      { name: "restart", arguments: { id: "d1" } },
-      meta({ "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } } }));
-    assert.equal(called.result.structuredContent.action, "decline");
-    assert.equal(called.result.structuredContent.restarted, false);
+    const first = await c.request("tools/call",
+      { name: "restart", arguments: { id: "d1" } }, ELICIT_CAPS);
+    assert.equal(first.result.resultType, "input_required");
+
+    // The same request again, with what the client gathered.
+    const second = await c.request("tools/call", {
+      name: "restart",
+      arguments: { id: "d1" },
+      inputResponses: {
+        why: { action: "accept", content: { reason: "Rolling back the deploy" } },
+      },
+    }, ELICIT_CAPS);
+
+    assert.equal(second.result.structuredContent.action, "accept");
+    assert.equal(second.result.structuredContent.restarted, true);
+    assert.equal(second.result.structuredContent.reason, "Rolling back the deploy");
+  } finally { await c.close(); }
+});
+
+test("any instance can answer the retry, which is the whole point", async () => {
+  /* The round trip carries everything needed, so the retry does not have to
+   * reach the process that asked. Two servers that have never spoken: one
+   * raises the request, a different one completes it. */
+  const first = connect();
+  const second = connect();
+  try {
+    const asked = await first.request("tools/call",
+      { name: "restart", arguments: { id: "d1" } }, ELICIT_CAPS);
+    assert.equal(asked.result.resultType, "input_required");
+
+    const finished = await second.request("tools/call", {
+      name: "restart",
+      arguments: { id: "d1" },
+      inputResponses: { why: { action: "accept", content: { reason: "Rolled back" } } },
+    }, ELICIT_CAPS);
+
+    assert.equal(finished.result.structuredContent.restarted, true,
+      "a second instance could not finish what the first one started");
+  } finally { await first.close(); await second.close(); }
+});
+
+test("declining is the person's answer and reaches the handler as one", async () => {
+  const c = connect();
+  try {
+    const answered = await c.request("tools/call", {
+      name: "restart", arguments: { id: "d1" },
+      inputResponses: { why: { action: "decline" } },
+    }, ELICIT_CAPS);
+    assert.equal(answered.result.structuredContent.action, "decline");
+    assert.equal(answered.result.structuredContent.restarted, false);
   } finally { await c.close(); }
 });
 
 test("dismissing without choosing is not the same as saying no", async () => {
-  /* Cancel is a person who walked away; decline is a person who decided.
-   * Recording the first as the second puts a refusal in the record that
-   * nobody made. */
-  const c = connect({
-    answer: (message) => message.method === "elicitation/create"
-      ? { result: { action: "cancel" } } : undefined,
-  });
+  const c = connect();
   try {
-    const called = await c.request("tools/call",
-      { name: "restart", arguments: { id: "d1" } },
-      meta({ "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } } }));
-    assert.equal(called.result.structuredContent.action, "cancel");
-    assert.equal(called.result.structuredContent.restarted, false);
+    const answered = await c.request("tools/call", {
+      name: "restart", arguments: { id: "d1" },
+      inputResponses: { why: { action: "cancel" } },
+    }, ELICIT_CAPS);
+    assert.equal(answered.result.structuredContent.action, "cancel");
+    assert.equal(answered.result.structuredContent.restarted, false);
   } finally { await c.close(); }
 });
 
-test("a cancelled call does not leave its question waiting forever", async () => {
-  /* This is the line between an in-flight request and a session. A question
-   * that outlives the request that asked it is state the next request could
-   * find, which is the thing this server does not have. */
-  const c = connect({ answer: () => undefined });
+test("a client that never offered elicitation is not asked to go and get it", async () => {
+  /* Absent is not refused, and it is not a round trip either: asking a client
+   * with no way to put the question to anybody would loop forever. */
+  const c = connect();
   try {
-    const call = c.send("tools/call",
-      { name: "restart", arguments: { id: "d1" } },
-      meta({ "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } } }));
-    // Wait until the server has actually asked, so the cancellation lands
-    // while the question is outstanding rather than before it was sent.
-    for (let i = 0; i < 50 && !c.asked.some((m) => m.method === "elicitation/create"); i += 1) {
-      await new Promise((r) => setTimeout(r, 20));
-    }
-    assert.ok(c.asked.some((m) => m.method === "elicitation/create"));
-    c.write({
-      jsonrpc: "2.0", method: "notifications/cancelled",
-      params: { requestId: call.id },
-    });
-    const answered = await Promise.race([
-      call.settled.then(() => "answered"),
-      new Promise((r) => setTimeout(() => r("still waiting"), 2000)),
-    ]);
-    assert.equal(answered, "answered",
-      "the tool call is still waiting for an answer nobody is going to send");
+    const answered = await c.request("tools/call", { name: "restart", arguments: { id: "d1" } });
+    assert.equal(answered.result.resultType, undefined,
+      "the server asked a client that cannot ask anybody");
+    assert.equal(answered.result.structuredContent.action, "unavailable");
   } finally { await c.close(); }
 });
 
-test("a client that never offered elicitation is not asked", async () => {
-  /* Absent is not refused. A handler usually wants a different answer for a
-   * client that has no way to ask anybody than for a person who said no. */
-  const c = connect({
-    answer: (message) => message.method === "elicitation/create"
-      ? { result: { action: "accept", content: {} } } : undefined,
-  });
+test("sampling takes the same round trip", async () => {
+  const c = connect();
   try {
-    const called = await c.request("tools/call", { name: "restart", arguments: { id: "d1" } });
-    assert.equal(called.result.structuredContent.action, "unavailable");
-    assert.equal(c.asked.filter((m) => m.method === "elicitation/create").length, 0,
-      "the server asked a client that never offered elicitation");
+    const first = await c.request("tools/call",
+      { name: "summarise", arguments: {} }, SAMPLE_CAPS);
+    assert.equal(first.result.resultType, "input_required");
+    assert.equal(first.result.inputRequests.summary.method, "sampling/createMessage");
+    assert.equal(first.result.inputRequests.summary.params.maxTokens, 200);
+
+    const second = await c.request("tools/call", {
+      name: "summarise", arguments: {},
+      inputResponses: {
+        summary: {
+          model: "claude-opus-5", role: "assistant", stopReason: "endTurn",
+          content: { type: "text", text: "Checkout is failing on payment timeouts." },
+        },
+      },
+    }, SAMPLE_CAPS);
+    assert.equal(second.result.structuredContent.ok, true);
+    assert.equal(second.result.structuredContent.model, "claude-opus-5");
+    assert.match(second.result.structuredContent.text, /payment timeouts/);
   } finally { await c.close(); }
 });
 
-/* Sampling: the server asks the client's model. */
-
-test("a tool asks the client's model and gets a completion", async () => {
-  const c = connect({
-    answer: (message) => message.method === "sampling/createMessage"
-      ? {
-          result: {
-            model: "claude-opus-5", role: "assistant", stopReason: "endTurn",
-            content: { type: "text", text: "Checkout is failing on payment timeouts." },
-          },
-        }
-      : undefined,
-  });
+test("a client that cannot sample is told apart from one that will not", async () => {
+  const c = connect();
   try {
-    const called = await c.request("tools/call",
-      { name: "summarise", arguments: {} },
-      meta({ "io.modelcontextprotocol/clientCapabilities": { sampling: {} } }));
-    assert.equal(called.result.structuredContent.ok, true);
-    assert.equal(called.result.structuredContent.model, "claude-opus-5");
-    assert.match(called.result.structuredContent.text, /payment timeouts/);
-
-    const asked = c.asked.find((m) => m.method === "sampling/createMessage");
-    assert.equal(asked.params.messages[0].role, "user");
-    assert.equal(asked.params.maxTokens, 200);
-  } finally { await c.close(); }
-});
-
-test("a client that refuses to sample is told apart from one that cannot", async () => {
-  const c = connect({
-    answer: (message) => message.method === "sampling/createMessage"
-      ? { error: { code: -32000, message: "The user declined sampling." } } : undefined,
-  });
-  try {
-    const refused = await c.request("tools/call",
-      { name: "summarise", arguments: {} },
-      meta({ "io.modelcontextprotocol/clientCapabilities": { sampling: {} } }));
-    assert.equal(refused.result.structuredContent.ok, false);
-    assert.equal(refused.result.structuredContent.reason, "refused");
-    assert.match(refused.result.structuredContent.detail, /declined/);
-
     const absent = await c.request("tools/call", { name: "summarise", arguments: {} });
+    assert.equal(absent.result.structuredContent.ok, false);
     assert.equal(absent.result.structuredContent.reason, "absent");
+  } finally { await c.close(); }
+});
+
+test("two things are asked for in one round trip, not two", async () => {
+  const c = connect();
+  try {
+    const first = await c.request("tools/call",
+      { name: "both_at_once", arguments: {} },
+      meta({ "io.modelcontextprotocol/clientCapabilities":
+        { elicitation: { form: {} }, sampling: {} } }));
+    assert.equal(first.result.resultType, "input_required");
+    assert.deepEqual(Object.keys(first.result.inputRequests).sort(), ["summary", "who"]);
+
+    const second = await c.request("tools/call", {
+      name: "both_at_once", arguments: {},
+      inputResponses: {
+        who: { action: "accept", content: { name: "Sam" } },
+        summary: { content: { type: "text", text: "All quiet." } },
+      },
+    }, meta({ "io.modelcontextprotocol/clientCapabilities":
+      { elicitation: { form: {} }, sampling: {} } }));
+    assert.equal(second.result.structuredContent.who, "Sam");
+    assert.equal(second.result.structuredContent.summary, "All quiet.");
+  } finally { await c.close(); }
+});
+
+test("a partial answer asks only for what is still missing", async () => {
+  const c = connect();
+  try {
+    const partial = await c.request("tools/call", {
+      name: "both_at_once", arguments: {},
+      inputResponses: { who: { action: "accept", content: { name: "Sam" } } },
+    }, meta({ "io.modelcontextprotocol/clientCapabilities":
+      { elicitation: { form: {} }, sampling: {} } }));
+    assert.equal(partial.result.resultType, "input_required");
+    assert.deepEqual(Object.keys(partial.result.inputRequests), ["summary"],
+      "the client was asked again for something it had already answered");
   } finally { await c.close(); }
 });
 
@@ -408,20 +452,43 @@ test("a transport with no stream says so rather than leaving a client waiting", 
   assert.match(answer.error.message, /no notification stream/);
 });
 
-test("elicitation over a transport with no way back is unavailable, not a hang", async () => {
+test("elicitation works over a transport with no way back at all", async () => {
+  /* This test used to assert the opposite, and asserting the opposite was
+   * right for the pattern it was written against: a server-initiated request
+   * needs a channel back, and a single HTTP response has none.
+   *
+   * The round trip removes the need. Nothing is sent to the client except a
+   * result, and the client returns with the answer on an ordinary request. So
+   * elicitation now works on a transport that can only ever answer, which is
+   * the whole reason the specification changed it. */
   const app = new App({ name: "no-way-back", version: "1.0.0" });
-  app.tool("ask", { description: "Asks." }, async (_input, ctx) =>
-    ctx.elicit({
+  app.tool("ask", { description: "Asks." }, async (_input, ctx) => {
+    const answer = await ctx.elicit("why", {
       message: "Why?",
       requestedSchema: { type: "object", properties: { reason: { type: "string" } } },
-    }));
-  const answer = await app.handle({
+    });
+    return { action: answer.action, ...(answer.action === "accept" ? answer.content : {}) };
+  });
+
+  const caps = meta({
+    "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } },
+  });
+
+  const asked = await app.handle({
     jsonrpc: "2.0", id: 1, method: "tools/call",
+    params: { name: "ask", arguments: {}, _meta: caps },
+  });
+  assert.equal(asked.result.resultType, "input_required");
+  assert.equal(asked.result.inputRequests.why.method, "elicitation/create");
+
+  const finished = await app.handle({
+    jsonrpc: "2.0", id: 2, method: "tools/call",
     params: {
       name: "ask", arguments: {},
-      _meta: meta({ "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } } }),
+      inputResponses: { why: { action: "accept", content: { reason: "because" } } },
+      _meta: caps,
     },
   });
-  assert.equal(answer.result.structuredContent.action, "unavailable");
-  assert.match(answer.result.structuredContent.reason, /no way back/);
+  assert.equal(finished.result.structuredContent.action, "accept");
+  assert.equal(finished.result.structuredContent.reason, "because");
 });

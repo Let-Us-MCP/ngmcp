@@ -11,16 +11,18 @@ import {
   Limiter, RequestLifetime, systemClock, type Clock,
 } from "./concurrency.js";
 import { InFlight, RequestNotifier, type Backpressure, type Sink } from "./notifications.js";
-import { Outbound } from "./outbound.js";
+import {
+  InputRequired, inputRequiredResult, inputResponsesOf, requestStateOf,
+  type InputRequests, type InputResponses,
+} from "./mrtr.js";
 import {
   Subscriptions, agreed, SUBSCRIPTION_ID,
   type SubscriptionFilter,
 } from "./subscriptions.js";
 import {
   toolDescriptor, promptDescriptor, validate, viewContents,
-  type Context, type ElicitOutcome, type ElicitRequest, type RegisteredPrompt,
-  type RegisteredTool, type ResourceDefinition, type SampleOutcome,
-  type SampleRequest, type ViewDefinition,
+  type Context, type RegisteredPrompt,
+  type RegisteredTool, type ResourceDefinition, type ViewDefinition,
 } from "./registry.js";
 
 export interface DispatcherOptions {
@@ -63,9 +65,6 @@ const err = (id: Id | null, code: number, message: string, data?: unknown): Fail
 export class Dispatcher {
   readonly #limiter: Limiter;
   readonly inFlight = new InFlight();
-  /** Questions this server has asked the client and is still waiting on. Each
-   *  belongs to one in-flight request and dies with it. */
-  readonly outbound = new Outbound();
   /** Open `subscriptions/listen` streams, which are in-flight requests too. */
   readonly subscriptions = new Subscriptions();
   #sink: Sink = NO_SINK;
@@ -248,7 +247,8 @@ export class Dispatcher {
       const messages = await prompt.handler(
         (params["arguments"] ?? {}) as Record<string, string>,
         this.#context(id, lifetime, meta, new RequestNotifier(
-          this.#sink, lifetime, meta.progressToken, meta.logLevel, this.#backpressure)),
+          this.#sink, lifetime, meta.progressToken, meta.logLevel, this.#backpressure),
+          params),
       );
       return ok(id, {
         ...(prompt.definition.description
@@ -317,78 +317,89 @@ export class Dispatcher {
     lifetime: RequestLifetime,
     meta: ReturnType<typeof parseMeta>,
     notifier: RequestNotifier,
+    params: Record<string, unknown> = {},
   ): Context {
+    // Everything the round-trip pattern needs arrives on this request: what
+    // the client was asked for last time, and what it came back with. Nothing
+    // is looked up, so any instance can answer the retry.
+    const responses: InputResponses = inputResponsesOf(params);
+    const state = requestStateOf(params);
+    const capabilities = meta.clientCapabilities as Record<string, unknown>;
+
+    const require = (
+      requests: InputRequests, nextState?: string,
+    ): Record<string, Record<string, unknown>> => {
+      const missing: InputRequests = {};
+      const found: Record<string, Record<string, unknown>> = {};
+      for (const [key, request] of Object.entries(requests)) {
+        const answer = responses[key];
+        if (answer) found[key] = answer;
+        else missing[key] = request;
+      }
+      if (Object.keys(missing).length) throw new InputRequired(missing, nextState);
+      return found;
+    };
+
     return {
       signal: lifetime.signal,
       requestId: id,
       client: meta.clientInfo,
       capabilities: meta.clientCapabilities,
       meta,
+      hasInputs: Object.keys(responses).length > 0,
+      ...(state !== undefined ? { requestState: state } : {}),
       progress: (progress, total, message) => notifier.progress(progress, total, message),
       log: (level, data) => notifier.log(level, data),
-      elicit: (request) => this.#elicit(request, meta, lifetime),
-      sample: (request) => this.#sample(request, meta, lifetime),
-    };
-  }
+      requireInputs: require,
 
-  async #elicit(
-    request: ElicitRequest,
-    meta: ReturnType<typeof parseMeta>,
-    lifetime: RequestLifetime,
-  ): Promise<ElicitOutcome> {
-    // Absent is not refused. A client that never declared elicitation is not
-    // saying no, it is saying it has no way to ask anybody, and a handler
-    // usually wants a different answer in the two cases.
-    const declared = (meta.clientCapabilities as Record<string, unknown>)["elicitation"];
-    if (!declared) {
-      return { action: "unavailable", reason: "This client offers no elicitation." };
-    }
-    const answer = await this.outbound.ask(
-      "elicitation/create",
-      { mode: "form", message: request.message, requestedSchema: request.requestedSchema },
-      lifetime.signal,
-    );
-    if (answer.error) {
-      return { action: "unavailable", reason: answer.error.message };
-    }
-    const action = answer.result?.["action"];
-    if (action === "accept") {
-      return {
-        action: "accept",
-        content: (answer.result?.["content"] ?? {}) as Record<
-          string, string | number | boolean | string[]>,
-      };
-    }
-    if (action === "decline") return { action: "decline" };
-    return { action: "cancel" };
-  }
+      elicit: async (key, request) => {
+        // Absent is not refused. A client that never declared elicitation has
+        // no way to put the question to anybody, and asking it to retry would
+        // loop forever.
+        if (!capabilities["elicitation"]) {
+          return { action: "unavailable", reason: "This client offers no elicitation." };
+        }
+        const answer = require({
+          [key]: {
+            method: "elicitation/create",
+            params: {
+              mode: "form",
+              message: request.message,
+              requestedSchema: request.requestedSchema,
+            },
+          },
+        })[key]!;
+        const action = answer["action"];
+        if (action === "accept") {
+          return {
+            action: "accept",
+            content: (answer["content"] ?? {}) as Record<
+              string, string | number | boolean | string[]>,
+          };
+        }
+        return action === "decline" ? { action: "decline" } : { action: "cancel" };
+      },
 
-  async #sample(
-    request: SampleRequest,
-    meta: ReturnType<typeof parseMeta>,
-    lifetime: RequestLifetime,
-  ): Promise<SampleOutcome> {
-    const declared = (meta.clientCapabilities as Record<string, unknown>)["sampling"];
-    if (!declared) {
-      return { ok: false, reason: "absent", detail: "This client offers no sampling." };
-    }
-    const answer = await this.outbound.ask(
-      "sampling/createMessage",
-      { ...request } as Record<string, unknown>,
-      lifetime.signal,
-    );
-    if (answer.error) {
-      return { ok: false, reason: "refused", detail: answer.error.message };
-    }
-    const result = answer.result ?? {};
-    return {
-      ok: true,
-      model: String(result["model"] ?? ""),
-      role: (result["role"] as "user" | "assistant") ?? "assistant",
-      content: (result["content"] ?? { type: "text", text: "" }) as
-        { type: string; text?: string },
-      ...(result["stopReason"] !== undefined
-        ? { stopReason: String(result["stopReason"]) } : {}),
+      sample: async (key, request) => {
+        if (!capabilities["sampling"]) {
+          return { ok: false, reason: "absent", detail: "This client offers no sampling." };
+        }
+        const answer = require({
+          [key]: {
+            method: "sampling/createMessage",
+            params: { ...request } as Record<string, unknown>,
+          },
+        })[key]!;
+        return {
+          ok: true,
+          model: String(answer["model"] ?? ""),
+          role: (answer["role"] as "user" | "assistant") ?? "assistant",
+          content: (answer["content"] ?? { type: "text", text: "" }) as
+            { type: string; text?: string },
+          ...(answer["stopReason"] !== undefined
+            ? { stopReason: String(answer["stopReason"]) } : {}),
+        };
+      },
     };
   }
 
@@ -415,7 +426,7 @@ export class Dispatcher {
     );
     this.inFlight.add(id, lifetime);
 
-    const context: Context = this.#context(id, lifetime, meta, notifier);
+    const context: Context = this.#context(id, lifetime, meta, notifier, params);
 
     try {
       const input = await validate(tool.definition.input, params["arguments"] ?? {});
@@ -441,6 +452,11 @@ export class Dispatcher {
       }
       return ok(id, this.#result(tool, output));
     } catch (error) {
+      // Not a failure: the handler is telling the client what to go and get,
+      // and the client retries this same request with the answers attached.
+      if (error instanceof InputRequired) {
+        return ok(id, inputRequiredResult(error.requests, error.state));
+      }
       if (error instanceof AbortedBeforeStart) {
         return err(id, CODE.internal, `Request ${lifetime.reason}`);
       }

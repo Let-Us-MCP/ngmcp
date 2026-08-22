@@ -39,16 +39,33 @@ export interface Context {
   readonly meta: RequestMeta;
   progress(progress: number, total?: number, message?: string): void;
   log(level: "debug" | "info" | "warning" | "error", data: unknown): void;
-  /** Ask the person, through the client, and wait for what they say.
+  /** Ask the person, through the client, under the round-trip pattern.
+   *
+   * Returns the answer if the client has already supplied it; otherwise throws
+   * `InputRequired`, which the dispatcher turns into an `input_required`
+   * result. The client gathers the answer and **retries the same request**,
+   * and this handler runs again from the top with the answer available.
+   *
+   * `key` names the request so the answer can be matched to it. It must be
+   * stable across the retry — deriving it from the arguments is fine, deriving
+   * it from a clock or a counter is not.
    *
    * Three answers plus one: accept, decline and cancel are the person's, and
    * `unavailable` is the client's, for a host that never offered elicitation
-   * or a transport with no way back. A handler that treats the fourth as a
-   * decline is making a decision on somebody's behalf. */
-  elicit(request: ElicitRequest): Promise<ElicitOutcome>;
-  /** Ask the client's model for a completion. Same shape of answer, and the
-   *  same reason for it. */
-  sample(request: SampleRequest): Promise<SampleOutcome>;
+   * at all. A handler that treats the fourth as a decline is making a decision
+   * on somebody's behalf. */
+  elicit(key: string, request: ElicitRequest): Promise<ElicitOutcome>;
+  /** Ask the client's model for a completion, the same way. */
+  sample(key: string, request: SampleRequest): Promise<SampleOutcome>;
+  /** Ask for several things in one round trip rather than one per trip. */
+  requireInputs(requests: Record<string, {
+    method: string; params: Record<string, unknown>;
+  }>, state?: string): Record<string, Record<string, unknown>>;
+  /** What the client echoed back, for a handler that asked for one. */
+  readonly requestState?: string;
+  /** Whether this is a retry carrying answers, which a handler rarely needs
+   *  to know and occasionally does. */
+  readonly hasInputs: boolean;
 }
 
 export interface ElicitRequest {
@@ -66,6 +83,10 @@ export type ElicitOutcome =
   | { action: "decline" }
   | { action: "cancel" }
   | { action: "unavailable"; reason: string };
+
+/** What a handler is told when the client cannot be asked at all. */
+export const UNAVAILABLE_ELICIT = (reason: string): ElicitOutcome =>
+  ({ action: "unavailable", reason });
 
 export interface SampleRequest {
   messages: Array<{ role: "user" | "assistant"; content: { type: string; text?: string } }>;

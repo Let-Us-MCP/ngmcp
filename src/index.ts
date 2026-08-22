@@ -48,8 +48,10 @@ export type {
 } from "./runtime/registry.js";
 export { Subscriptions, SUBSCRIPTION_ID, agreed } from "./runtime/subscriptions.js";
 export type { SubscriptionFilter } from "./runtime/subscriptions.js";
-export { Outbound, isAnswer } from "./runtime/outbound.js";
-export type { Channel, Answer } from "./runtime/outbound.js";
+export {
+  InputRequired, inputRequiredResult, inputResponsesOf, requestStateOf,
+} from "./runtime/mrtr.js";
+export type { InputRequest, InputRequests, InputResponses } from "./runtime/mrtr.js";
 export type {
   Id, Request, Notification, Response, Success, Failure, Incoming,
 } from "./protocol/jsonrpc.js";

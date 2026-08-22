@@ -47,6 +47,7 @@ test("a server that is wrong on purpose fails on every count it is wrong about",
     "progress.needs-a-token",
     "notify.nothing-after-the-response",
     "ui.view-resolves",
+    "mrtr.no-server-requests",
   ];
   for (const id of shouldFail) {
     assert.equal(found[id], "fail", `${id} did not catch a deliberate violation`);

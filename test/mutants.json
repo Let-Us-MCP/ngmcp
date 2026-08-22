@@ -602,34 +602,18 @@
   {
     "name": "a client is asked for elicitation it never offered",
     "file": "src/runtime/dispatch.ts",
-    "find": "    const declared = (meta.clientCapabilities as Record<string, unknown>)[\"elicitation\"];\n    if (!declared) {\n      return { action: \"unavailable\", reason: \"This client offers no elicitation.\" };\n    }",
+    "find": "        if (!capabilities[\"elicitation\"]) {\n          return { action: \"unavailable\", reason: \"This client offers no elicitation.\" };\n        }\n",
     "replace": "",
     "suite": "test/integration/protocol-methods.test.js",
-    "why": "The server sends a question to a client with no way to put it to anybody, and reads the rejection back as a refusal. Absent and refused want different handling: one takes a fallback, the other takes an explanation."
+    "why": "The server tells a client with no way to ask anybody to go away and ask, and the client can only come back without an answer, so the round trip repeats forever. Absent has to be answered, not retried."
   },
   {
     "name": "a declined elicitation is read as an acceptance",
     "file": "src/runtime/dispatch.ts",
-    "find": "    if (action === \"decline\") return { action: \"decline\" };\n    return { action: \"cancel\" };",
-    "replace": "    return { action: \"decline\" };",
+    "find": "        return action === \"decline\" ? { action: \"decline\" } : { action: \"cancel\" };",
+    "replace": "        return { action: \"decline\" };",
     "suite": "test/integration/protocol-methods.test.js",
     "why": "Cancel and decline stop being distinguishable, so a person who dismissed a dialog without choosing is recorded as having refused."
-  },
-  {
-    "name": "a server-minted id can collide with a client's",
-    "file": "src/runtime/outbound.ts",
-    "find": "    const id: Id = `srv-${++this.#counter}`;",
-    "replace": "    const id: Id = this.#counter += 1;",
-    "suite": "test/integration/protocol-methods.test.js",
-    "why": "The id is the only thing on the wire that tells the two directions apart. A server asking with id 1 while the client has a request 1 open makes one of the two answers land on the wrong request."
-  },
-  {
-    "name": "a question outlives the request that asked it",
-    "file": "src/runtime/outbound.ts",
-    "find": "      if (signal.aborted) {\n        resolve({ error: { code: -32800, message: `The request was ${reasonOf(signal)}.` } });\n        return;\n      }\n      signal.addEventListener(\"abort\", onAbort, { once: true });",
-    "replace": "",
-    "suite": "test/integration/protocol-methods.test.js",
-    "why": "A tool call that was cancelled leaves its question pending forever, so the entry is connection state after all: something that outlives the request that made it."
   },
   {
     "name": "a subscription is acknowledged after the fact",
@@ -918,5 +902,29 @@
     "replace": "      const twice: string[] = [];",
     "suite": "test/integration/conform.test.js",
     "why": "Two tools with one name makes every call to it ambiguous, and the server picks. The check exists because the ambiguity is invisible from the listing."
+  },
+  {
+    "name": "input already answered is asked for again",
+    "file": "src/runtime/dispatch.ts",
+    "find": "        const answer = responses[key];\n        if (answer) found[key] = answer;\n        else missing[key] = request;",
+    "replace": "        missing[key] = request;",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "Every retry asks for everything again, including what the client has already supplied, so the round trip never terminates and the person is asked the same question until they give up."
+  },
+  {
+    "name": "a handler needing input is reported as having failed",
+    "file": "src/runtime/dispatch.ts",
+    "find": "      if (error instanceof InputRequired) {\n        return ok(id, inputRequiredResult(error.requests, error.state));\n      }\n",
+    "replace": "",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "Asking for input is not a failure, it is half of the round trip. Reported as an error, the client has nothing to go and get and the request can never complete."
+  },
+  {
+    "name": "the input request is not the shape the client reads",
+    "file": "src/runtime/mrtr.ts",
+    "find": "    resultType: \"input_required\",\n    inputRequests: requests,",
+    "replace": "    resultType: \"complete\",\n    inputRequests: requests,",
+    "suite": "test/integration/protocol-methods.test.js",
+    "why": "A client reads `resultType` to know whether it is being asked for something. Marked complete, it takes an empty answer for the finished one and never retries."
   }
 ]

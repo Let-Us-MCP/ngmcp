@@ -300,14 +300,30 @@ Exit code is 1 if anything failed. `--json` for a pipe, `--only` for one check,
 
 ## Prompts, elicitation, sampling, subscriptions
 
-All four are implemented, and two of them invert the direction: the server
-sends a request and the client answers it. That needs a transport with a way
-back, and where there is none the answer is `unavailable` rather than a hang.
+All four are implemented. Elicitation and sampling use **Multi Round-Trip
+Requests**, which is what `2026-07-28` replaced server-initiated requests with:
+a server no longer sends `elicitation/create` down the wire and waits for an
+answer. It says what it needs, and the client **retries the same request** with
+the answer attached.
 
 ```ts
-const answer = await ctx.elicit({ message: "Why?", requestedSchema: { ... } });
+const answer = await ctx.elicit("why", { message: "Why?", requestedSchema: { ... } });
 // accept, decline, cancel — the person's — or unavailable, the client's.
 ```
+
+That call returns the answer if the client has already supplied it, and
+otherwise stops the handler and answers `input_required`. The handler is then
+**re-run from the top** on the retry, so it must be safe to run again up to the
+point where it asks — read what you like, change nothing until the answer is in
+hand.
+
+The reason is the same one this package is built on, and the specification says
+it outright: the round trip works "without requiring a shared storage layer
+across server instances or requiring stateful load balancing". A
+server-initiated request needs its answer to come back to the very process that
+asked. A retry is an ordinary request carrying everything needed, so **any
+instance can finish what another one started** — which is asserted here rather
+than claimed.
 
 `subscriptions/listen` is the stream that replaced the HTTP GET endpoint, and
 it is how a dashboard panel updates without a conversation turn. A subscription
@@ -341,7 +357,8 @@ Named because a reader should not have to find out by trying.
   nothing here renders one into a view: that needs a parser and a layout
   engine, which is a dependency-sized problem rather than a component.
 - **A streaming HTTP transport.** `subscriptions/listen` works over stdio and
-  is refused with a reason over a single HTTP response.
+  is refused with a reason over a single HTTP response. Elicitation and
+  sampling need no stream at all, because the round trip removed the need.
 - **Claude Code cannot use it**, through no fault of this package. See
   `docs/findings/001`. Claude Desktop reaches it through the `initialize` shim
   in `src/transport/legacy.ts`; see `examples/gallery/README.md`.

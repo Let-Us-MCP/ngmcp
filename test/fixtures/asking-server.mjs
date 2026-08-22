@@ -35,7 +35,9 @@ app.tool("restart", {
   description: "Restart a deployment, after asking why.",
   annotations: { destructiveHint: true },
 }, async (input, ctx) => {
-  const answer = await ctx.elicit({
+  // Nothing is changed before the answer is in hand, because this handler runs
+  // again from the top when the client retries with it.
+  const answer = await ctx.elicit("why", {
     message: "Why is this being restarted?",
     requestedSchema: {
       type: "object",
@@ -53,7 +55,7 @@ app.tool("summarise", {
   description: "Summarise the incident, using the client's model.",
   annotations: { readOnlyHint: true },
 }, async (_input, ctx) => {
-  const answer = await ctx.sample({
+  const answer = await ctx.sample("summary", {
     messages: [{ role: "user", content: { type: "text", text: "Summarise the incident." } }],
     maxTokens: 200,
   });
@@ -68,6 +70,33 @@ app.tool("stir", {
   const other = app.resourceUpdated("res://other");
   const tools = app.listChanged("tools");
   return { resources, other, tools };
+});
+
+app.tool("both_at_once", {
+  description: "Asks for two things in one round trip rather than two.",
+  annotations: { readOnlyHint: true },
+}, async (_input, ctx) => {
+  const answers = ctx.requireInputs({
+    who: {
+      method: "elicitation/create",
+      params: {
+        mode: "form", message: "Who is asking?",
+        requestedSchema: { type: "object", properties: { name: { type: "string" } },
+          required: ["name"] },
+      },
+    },
+    summary: {
+      method: "sampling/createMessage",
+      params: {
+        messages: [{ role: "user", content: { type: "text", text: "One sentence." } }],
+        maxTokens: 50,
+      },
+    },
+  });
+  return {
+    who: String(answers.who?.content?.name ?? ""),
+    summary: String(answers.summary?.content?.text ?? ""),
+  };
 });
 
 app.serve();

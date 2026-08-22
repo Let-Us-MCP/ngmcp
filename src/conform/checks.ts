@@ -343,6 +343,31 @@ export const CHECKS: Check[] = [
   },
 
   {
+    id: "mrtr.no-server-requests",
+    title: "the server never sends a request of its own",
+    async run(c) {
+      const tool = c.safeTool();
+      if (!tool) {
+        return na("no tool is annotated readOnlyHint, and nothing destructive is called");
+      }
+      const before = c.notifications().length;
+      await c.ask("tools/call", { name: String(tool["name"]), arguments: {} });
+      await c.wait(300);
+      // A message carrying both a method and an id is a request. From a server
+      // that is the pattern this version removed: input is asked for inside a
+      // result, so the client can retry anywhere rather than answering the one
+      // process that asked.
+      const requests = c.notifications().slice(before).filter((n) =>
+        typeof n.message["method"] === "string"
+        && n.message["id"] !== undefined && n.message["id"] !== null);
+      if (!requests.length) return pass("nothing was sent that expects an answer");
+      const methods = [...new Set(requests.map((n) => String(n.message["method"])))];
+      return fail(`sent ${methods.join(", ")} as a request of its own; this version `
+        + "replaced that with an input_required result the client retries");
+    },
+  },
+
+  {
     id: "ui.view-resolves",
     title: "a tool naming a view has that view readable, with the app mime type",
     async run(c) {
