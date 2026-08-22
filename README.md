@@ -299,7 +299,10 @@ named in `_meta`, not a failed board.
 
 Named because a reader should not have to find out by trying.
 
-- **`Map` and `Mermaid`.** One needs a projection, the other a parser.
+- **`Map`, and a `Mermaid` *pane*.** A map needs a projection. `mermaid()` in
+  `src/text/` writes the fenced block, and every markdown host draws it, but
+  nothing here renders one into a view: that needs a parser and a layout
+  engine, which is a dependency-sized problem rather than a component.
 - **A streaming HTTP transport.** `subscriptions/listen` works over stdio and
   is refused with a reason over a single HTTP response.
 - **Claude Code cannot use it**, through no fault of this package. See
@@ -317,6 +320,16 @@ WebKit**, because the two disagree about focus, dialogs, insets and clipboard.
 ```
 npm run test:browser
 NGMCP_ENGINES=webkit npm run test:browser
+```
+
+A view can also be exercised with no host and no browser at all. `fakeBridge`
+answers tool calls from a plain object, so the typed client under test is the
+real one:
+
+```ts
+const api = client<typeof contracts>({
+  bridge: fakeBridge({ list_deployments: { deployments: ROWS } }),
+});
 ```
 
 Two of those tests are load-bearing and each has the mutation it exists to

@@ -183,9 +183,11 @@ Three obligations beyond drawing, each with a mutant:
    dashboard panel that answered again must not keep showing the previous
    answer.
 
-`Map` and `Mermaid` from the floor are not in this cut: one needs a projection
-and the other a parser, and each is a dependency-sized problem rather than a
-component.
+`Map` is not in this cut: it needs a projection. Neither is a `Mermaid` **pane**
+— `mermaid()` in `src/text/` writes the fenced block and a markdown host draws
+it, but rendering one *into a view* needs a parser and a layout engine, which
+is a dependency-sized problem rather than a component. Writing a diagram and
+drawing one are different jobs, and only the first is here.
 
 ### Dashboard shells (`src/view/templates/`)
 

@@ -304,6 +304,8 @@ claim is something somebody looked at rather than a test result.
 | Shell | `gridStack` | panels that refresh apart, layout as a value, one column at 320 |
 | Surface | `surface` | granted, absent, refused; insets, display mode, teardown |
 | Surface | `hostBridge` | postMessage, ids correlated, order not assumed |
+| Text | `bars`, `histogram`, `sparkline` | the same shapes with no DOM, for a host with no frame |
+| Text | `table`, `mermaid` | plain or markdown; a fenced block a markdown host draws |
 
 Each of them is mounted alone and run through `axe` in both engines, and five
 mutants stand behind that suite so it cannot pass by not looking: an unnamed
@@ -325,8 +327,9 @@ that gets something usable soonest:
 1. ~~`DataTable`, `Metric`, `Toast`, `Banner`, `Button`, `Form`~~ done.
 2. ~~Layout: `Stack`, `Columns`, `Tabs`, `Card`, `Dialog`~~ done.
    ~~Agent: `Proposal`, `ApprovalCard`, `TaskList`, `Stream`~~ done.
-3. ~~Charts, starting with `LineChart` and `Sparkline`~~ done, less `Map` and
-   `Mermaid`: one needs a projection and the other a parser.
+3. ~~Charts, starting with `LineChart` and `Sparkline`~~ done, less `Map`,
+   which needs a projection, and a `Mermaid` pane, which needs a parser.
+   `mermaid()` in `src/text/` writes the block; drawing one is the other job.
 4. ~~`ListTemplate` and `GridStack`, at which point it is a dashboard rather
    than a page~~ done, along with the Surface and the four protocol methods
    that were missing.
